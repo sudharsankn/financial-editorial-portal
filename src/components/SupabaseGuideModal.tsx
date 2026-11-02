@@ -15,7 +15,6 @@ import {
 import { SUPABASE_SQL_MIGRATION } from '../lib/sqlMigration';
 import {
   getSavedSupabaseConfig,
-  saveSupabaseConfig,
   checkSupabaseConnection,
   seedSupabaseWithInitialData,
   resetLocalStories,
@@ -33,6 +32,7 @@ export const SupabaseGuideModal: React.FC<SupabaseGuideModalProps> = ({
   onRefreshData,
 }) => {
   const [copiedSql, setCopiedSql] = useState(false);
+  const [copiedEnv, setCopiedEnv] = useState(false);
   const [url, setUrl] = useState('');
   const [anonKey, setAnonKey] = useState('');
   const [connectionStatus, setConnectionStatus] = useState<{
@@ -69,13 +69,6 @@ export const SupabaseGuideModal: React.FC<SupabaseGuideModalProps> = ({
     setTesting(false);
   };
 
-  const handleSaveCredentials = async (e: React.FormEvent) => {
-    e.preventDefault();
-    saveSupabaseConfig({ url: url.trim(), anonKey: anonKey.trim() });
-    await testConnection();
-    onRefreshData();
-    setStatusMessage('Credentials saved successfully.');
-  };
 
   const handleCopySql = () => {
     if (navigator.clipboard) {
@@ -212,53 +205,62 @@ export const SupabaseGuideModal: React.FC<SupabaseGuideModalProps> = ({
             </div>
           </div>
 
-          {/* Step 2: Supabase Credentials Input */}
-          <form onSubmit={handleSaveCredentials} className="space-y-4 pt-2 border-t border-[#E2E4E8]">
-            <div>
-              <h4 className="text-xs font-bold text-[#1E2229] uppercase tracking-wide mb-1">
-                2. Connect Your Supabase Project Credentials
-              </h4>
-              <p className="text-xs text-[#58606E] mb-3">
-                Found in Supabase Dashboard &gt; Project Settings &gt; API.
-              </p>
+          {/* Step 2: .env File Configuration (Stored in .env, not in browser localStorage) */}
+          <div className="space-y-3 pt-2 border-t border-[#E2E4E8]">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-[#1E2229] uppercase tracking-wide">
+                  2. Environment Configuration (.env &amp; Vercel)
+                </h4>
+                <p className="text-xs text-[#58606E]">
+                  Credentials are read strictly from <code className="bg-[#EBEEF7] px-1 py-0.5 rounded font-mono text-[11px]">.env</code> and Vercel Environment Variables (never stored in browser localStorage).
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const envText = `VITE_SUPABASE_URL="${url || 'https://your-project.supabase.co'}"\nVITE_SUPABASE_ANON_KEY="${anonKey || 'your-anon-key'}"\nNEXT_PUBLIC_SUPABASE_URL="${url || 'https://your-project.supabase.co'}"\nNEXT_PUBLIC_SUPABASE_ANON_KEY="${anonKey || 'your-anon-key'}"`;
+                  navigator.clipboard?.writeText(envText);
+                  setCopiedEnv(true);
+                  setTimeout(() => setCopiedEnv(false), 2000);
+                }}
+                className="inline-flex items-center gap-1 text-xs font-bold text-[#6A1B9A] hover:text-[#7B1FA2] bg-[#F3E5F5] px-2.5 py-1 rounded transition-colors shrink-0"
+              >
+                {copiedEnv ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-[#0E8A54]" />
+                    <span className="text-[#0E8A54]">Copied .env!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy .env Template</span>
+                  </>
+                )}
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-bold text-[#58606E] uppercase mb-1">
-                  Project URL (NEXT_PUBLIC_SUPABASE_URL)
-                </label>
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://xyzcompany.supabase.co"
-                  className="w-full p-2 text-xs rounded border border-[#E2E4E8] focus:border-[#6A1B9A] outline-none font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-[#58606E] uppercase mb-1">
-                  Anon / Public Key (NEXT_PUBLIC_SUPABASE_ANON_KEY)
-                </label>
-                <input
-                  type="password"
-                  value={anonKey}
-                  onChange={(e) => setAnonKey(e.target.value)}
-                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                  className="w-full p-2 text-xs rounded border border-[#E2E4E8] focus:border-[#6A1B9A] outline-none font-mono"
-                />
-              </div>
+            <div className="p-3 bg-[#181C23] text-[#DFE2EC] rounded font-mono text-[11px] leading-relaxed border border-[#4D4351]">
+              <p className="text-[#8A92A0]"># Supabase Environment Variables</p>
+              <p><span className="text-[#DA9CFF]">VITE_SUPABASE_URL</span>=&quot;{url || 'https://your-project.supabase.co'}&quot;</p>
+              <p><span className="text-[#DA9CFF]">VITE_SUPABASE_ANON_KEY</span>=&quot;{anonKey ? `${anonKey.slice(0, 20)}...` : 'your-anon-public-key'}&quot;</p>
+              <p className="text-[#8A92A0] mt-1"># For Next.js App Router / Vercel</p>
+              <p><span className="text-[#DA9CFF]">NEXT_PUBLIC_SUPABASE_URL</span>=&quot;{url || 'https://your-project.supabase.co'}&quot;</p>
+              <p><span className="text-[#DA9CFF]">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>=&quot;{anonKey ? `${anonKey.slice(0, 20)}...` : 'your-anon-public-key'}&quot;</p>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <div className="flex items-center gap-2">
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={testConnection}
+                  disabled={testing}
                   className="px-4 py-2 rounded bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white text-xs font-bold shadow-xs transition-colors"
                 >
-                  Save &amp; Connect to Supabase
+                  {testing ? 'Testing .env...' : 'Test .env Connection'}
                 </button>
+
                 {connectionStatus.connected && (
                   <button
                     type="button"
@@ -277,10 +279,10 @@ export const SupabaseGuideModal: React.FC<SupabaseGuideModalProps> = ({
                 onClick={handleResetLocal}
                 className="text-[11px] text-[#8A92A0] hover:text-[#1E2229] underline"
               >
-                Reset Local Cache
+                Reset In-Memory Cache
               </button>
             </div>
-          </form>
+          </div>
         </div>
       </div>
     </div>

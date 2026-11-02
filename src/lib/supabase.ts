@@ -5,43 +5,32 @@ import { detectScript } from './grapheme';
 
 const LOCAL_STORAGE_KEY = 'financial_editorial_stories_v1';
 const LOCAL_TICKERS_KEY = 'financial_editorial_market_tickers_v1';
-const SUPABASE_CONFIG_KEY = 'financial_editorial_supabase_config_v1';
-
 
 export interface SupabaseConfig {
   url: string;
   anonKey: string;
 }
 
+/**
+ * Retrieves Supabase credentials strictly from environment variables (Vite / Next.js .env).
+ * Does NOT persist credentials in browser localStorage.
+ */
 export function getSavedSupabaseConfig(): SupabaseConfig {
-  // Check localStorage first
-  try {
-    const raw = localStorage.getItem(SUPABASE_CONFIG_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed.url && parsed.anonKey) {
-        return parsed;
-      }
-    }
-  } catch {}
-
-  // Fallback to Vite env variables
-  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-  const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+  const envUrl =
+    (import.meta as any).env?.VITE_SUPABASE_URL ||
+    (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_URL ||
+    '';
+  const envKey =
+    (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
+    (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    '';
 
   return {
-    url: envUrl.startsWith('http') ? envUrl : '',
-    anonKey: envKey.length > 10 ? envKey : '',
+    url: typeof envUrl === 'string' && envUrl.startsWith('http') ? envUrl.trim() : '',
+    anonKey: typeof envKey === 'string' && envKey.length > 10 ? envKey.trim() : '',
   };
 }
 
-export function saveSupabaseConfig(config: SupabaseConfig) {
-  try {
-    localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify(config));
-    // Reset client cache
-    cachedClient = null;
-  } catch {}
-}
 
 let cachedClient: SupabaseClient | null = null;
 
