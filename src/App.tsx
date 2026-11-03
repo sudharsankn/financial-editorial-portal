@@ -284,6 +284,7 @@ export default function App() {
             onClearActiveStory={() => setActiveEditingStory(null)}
             marketTickers={marketTickers}
             onRefreshMarketTickers={loadMarketTickers}
+            onRefreshStories={loadAdminStories}
             initialAdminTab={adminTab}
           />
         )}

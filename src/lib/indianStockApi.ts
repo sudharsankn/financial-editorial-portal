@@ -169,17 +169,38 @@ export async function mergeNewsIntoStories(newsArticles: any[]): Promise<number>
       ${item.url ? `<p><a href="${item.url}" target="_blank" rel="noopener noreferrer">Read original source dispatch on ${item.source || 'Market Desk'} &rarr;</a></p>` : ''}
     `.trim();
 
-    // Derive category from /news "topics" field (e.g. ['Industry'], ['Markets'], ['Companies'])
-    // If topics has items, use the primary topic; fallback to 'Market Trends'
-    let derivedCategory: string = 'Market Trends';
+    // Allowed categories matching database constraint or fallback safely to 'Market Trends'
+    const ALLOWED_CATEGORIES = new Set([
+      'Market Trends',
+      'Financial Planning',
+      'Big Story',
+      'Results Calendar',
+      'Event Calendar',
+      'Class Room',
+      'Political Theatre',
+      'Mutual Fund',
+      'Stock Recommendations',
+      'Portfolio',
+      'Sector Scan',
+      'Economy Watch',
+      'Personal Finance',
+      'Insurance',
+      'Tax Planning',
+      'IPO Pipeline',
+      'Mainboard IPO',
+      'SME IPO',
+    ]);
+
+    // Derive category from /news "topics" field
+    // If topic matches an allowed DB category, use it; otherwise use 'Market Trends'
+    let rawTopic = '';
     if (Array.isArray(item.topics) && item.topics.length > 0) {
-      const primaryTopic = String(item.topics[0]).trim();
-      if (primaryTopic) {
-        derivedCategory = primaryTopic;
-      }
+      rawTopic = String(item.topics[0]).trim();
     } else if (typeof item.topics === 'string' && item.topics.trim()) {
-      derivedCategory = item.topics.trim();
+      rawTopic = item.topics.trim();
     }
+
+    const derivedCategory: string = ALLOWED_CATEGORIES.has(rawTopic) ? rawTopic : 'Market Trends';
 
     // Build comma-separated keywords including topics
     const topicKeywords = Array.isArray(item.topics) ? item.topics.join(', ') : (item.topics || '');

@@ -69,6 +69,7 @@ interface AdminPanelProps {
   onClearActiveStory: () => void;
   marketTickers: MarketTickerItem[];
   onRefreshMarketTickers: () => Promise<void>;
+  onRefreshStories?: () => Promise<void>;
   initialAdminTab?: 'stories' | 'markets' | 'stocks';
 }
 
@@ -110,6 +111,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onClearActiveStory,
   marketTickers,
   onRefreshMarketTickers,
+  onRefreshStories,
   initialAdminTab = 'stories',
 }) => {
   const [adminTab, setAdminTab] = useState<'stories' | 'markets' | 'stocks'>(initialAdminTab);
@@ -1288,7 +1290,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     {/* TAB 3: INDIAN STOCK API STUDIO */}
     {adminTab === 'stocks' && (
-      <StockDataPanel onNotify={(msg) => setMessage(msg)} onEditStory={handleStartEdit} />
+      <StockDataPanel
+        onNotify={(msg) => setMessage(msg)}
+        onRefreshAllData={onRefreshStories}
+        onEditStory={handleStartEdit}
+      />
     )}
 
     {/* TAB 2: LIVE MARKETS TICKER MANAGER */}
