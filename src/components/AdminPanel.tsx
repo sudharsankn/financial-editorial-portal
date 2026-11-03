@@ -551,9 +551,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <Globe className="w-4 h-4 text-[#6A1B9A]" />
-          <span>IndianAPI Stock Data</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF7FC] text-[#6A1B9A] border border-[#6A1B9A]/30">
-            500/mo
+          <span>Market Data Studio</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30">
+            Free Engine
           </span>
         </button>
       </div>
@@ -690,11 +690,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                   <span className="text-[#6A1B9A] font-semibold">
                                     {script.name}
                                   </span>
-                                  {story.source_type === 'indianapi_news' && (
+                                  {(story.source_type === 'indianapi_news' || story.source_type === 'market_wire') && (
                                     <>
                                       <span>•</span>
                                       <span className="bg-[#FAF7FC] text-[#6A1B9A] font-bold px-1.5 py-0.2 rounded border border-[#6A1B9A]/30">
-                                        IndianAPI News
+                                        Market Wire
                                       </span>
                                     </>
                                   )}

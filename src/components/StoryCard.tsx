@@ -69,9 +69,9 @@ export const StoryCard: React.FC<StoryCardProps> = ({
               {story.section}
             </span>
 
-            {story.source_type === 'indianapi_news' && (
+            {(story.source_type === 'indianapi_news' || story.source_type === 'market_wire') && (
               <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#0E8A54]/90 text-white shadow-xs">
-                IndianAPI Wire
+                Market Wire
               </span>
             )}
           </div>

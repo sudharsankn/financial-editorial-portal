@@ -119,3 +119,4 @@ async function fetchDirectYahooChartFallback(symbol: string): Promise<YahooStock
     return null;
   }
 }
+

@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Story, StoryFormData, MarketTickerItem } from './types/story';
-import { fetchSavedStockData, fetchTrendingStocks, fetchIpos, StockDataRecord } from './lib/indianStockApi';
+import { fetchSavedStockData, fetchTrendingStocks, fetchIpos } from './lib/marketData';
 import { TrendingStockItem, IpoItemRecord } from './types/story';
 import {
   fetchPublishedStories,
@@ -41,7 +41,7 @@ export default function App() {
   const [activeArticle, setActiveArticle] = useState<Story | null>(null);
   const [activeEditingStory, setActiveEditingStory] = useState<Story | null>(null);
   const [marketTickers, setMarketTickers] = useState<MarketTickerItem[]>([]);
-  const [publishedStockData, setPublishedStockData] = useState<StockDataRecord[]>([]);
+  const [publishedStockData, setPublishedStockData] = useState<any[]>([]);
   const [publishedTrendingStocks, setPublishedTrendingStocks] = useState<TrendingStockItem[]>([]);
   const [publishedIpos, setPublishedIpos] = useState<IpoItemRecord[]>([]);
   const [loading, setLoading] = useState(true);

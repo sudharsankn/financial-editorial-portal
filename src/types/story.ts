@@ -93,7 +93,7 @@ export interface Story {
   notification_status: NotificationStatus;
   display_order: number;
   language?: string; // e.g., 'en' | 'ml' | 'hi' | 'ta' | 'ar'
-  source_type?: 'manual' | 'indianapi_news';
+  source_type?: 'manual' | 'indianapi_news' | 'market_wire';
   source_url?: string;
   published_at?: string; // Specific published timestamp
   created_at: string;

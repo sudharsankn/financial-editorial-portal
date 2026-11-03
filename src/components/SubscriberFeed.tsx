@@ -106,7 +106,7 @@ export const SubscriberFeed: React.FC<SubscriberFeedProps> = ({
                   </h3>
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F5EE] text-[#0E8A54]">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#0E8A54] animate-pulse" />
-                    <span>Live IndianAPI</span>
+                    <span>Live Markets</span>
                   </span>
                 </div>
                 <p className="text-[11px] text-[#58606E]">

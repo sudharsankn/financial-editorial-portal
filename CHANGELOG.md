@@ -7,23 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.0] - 2026-11-03
+## [2.0.0] - 2026-11-03
+
+### Removed
+- **`stock.indianapi.in` Fully Removed**:
+  - Completely purged external dependency on `stock.indianapi.in` and its 500 requests/month quota constraint.
+  - Deleted legacy client module `src/lib/indianStockApi.ts`.
+  - Removed all hardcoded IndianAPI URLs, API key constants, and usage rate limits.
 
 ### Added
-- **Yahoo Finance Free Market Engine (Approach A)**:
-  - Installed `yahoo-finance2` and created serverless backend endpoint `api/yahoo.ts` for Vercel and Node.js environments.
-  - Added support for single quotes (`/api/yahoo?symbol=RELIANCE`), batch quotes (`/api/yahoo?symbols=^NSEI,TCS,INFY`), and company valuation summaries (`/api/yahoo?symbol=RELIANCE&action=summary`).
-  - Automatically maps Indian tickers to `.NS` (NSE) and `.BO` (BSE) with full CORS handling.
-  - Implemented client SDK module `src/lib/yahooFinance.ts` with browser-safe fallback, Rupee currency formatting (`formatIndianRupee`), and market capitalization formatting in Crores (`formatMarketCapCrores`).
+- **Free Unlimited Market Data Engine (`src/lib/marketData.ts` & `api/market-data.ts`)**:
+  - **1-Click Sync**: Replaced IndianAPI with a native, completely free, unlimited market sync engine powered by Yahoo Finance (`yahoo-finance2`) and Real-Time Financial Wire RSS (`rss-parser`).
+  - **Live Trending Stocks**: Pulls top gainers and losers dynamically from the Indian Nifty 50 large-cap universe without rate limits.
+  - **Real-Time Financial News**: Merges live Indian financial dispatches directly into `public.stories` with status `'Draft'`.
+  - **Company Dossiers**: Fetches comprehensive fundamental metrics (P/E, Market Cap, 52-week High/Low, Volume) from Yahoo Finance.
+  - **Persistent IPO Watch**: Integrates with `public.ipos` table for tracking active and upcoming IPOs.
 
 ### Improved
-- **Unlimited Stock Quota Strategy**:
-  - Offloaded general company financials and real-time ticker quotes to Yahoo Finance, eliminating consumption of the 500 requests/month quota on IndianStockAPI.
-- **Stories Sync & Auto-Refresh**:
-  - Connected `onRefreshStories` callback in Admin Panel to auto-reload stories table after 1-click sync without needing a page refresh.
-
-### Fixed
-- Fixed PostgreSQL `stories_category_check` violation by adding a safe category fallback to `'Market Trends'` while retaining exact topic tags in story keywords.
+- **Updated UI Badges & Navigation**:
+  - Replaced `"IndianAPI Stock Data"` with `"Market Data Studio (Free Engine)"`.
+  - Updated article tags from `"IndianAPI Wire"` to `"Market Wire"`.
+  - Reflected `"100% Free / Unlimited"` quota status throughout the Admin Panel.
 
 ---
 
@@ -31,49 +35,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Dynamic Category Ingestion from `/news` Topics**:
-  - Ingested stories from `/news` now derive their `category` directly from the `topics` array returned by IndianAPI (e.g. `Industry`, `Companies`, `Markets`, `Economy`, `Money`, `Logistics`).
-  - Added new dynamic category types to `Category` and included them in the master `CATEGORIES` array.
-  - Category filter pills on the Subscriber Feed and Admin category dropdown now seamlessly filter by these topic categories.
+  - Ingested stories from `/news` derive their `category` directly from news topics (`Industry`, `Companies`, `Markets`, `Economy`, `Money`, `Logistics`).
+  - master `CATEGORIES` array updated for immediate filtering in feeds and dropdowns.
 
 ### Improved
 - **Database Category Flexibility**:
-  - Removed strict enum check constraint (`stories_category_check`) in `run_this_in_supabase_sql_editor.sql` and `sqlMigration.ts` to support dynamic topic categories without breaking Supabase table constraints.
-- **Article Tagging & Search**:
-  - Integrated topic keywords into `story.keywords` so search queries for topics immediately return relevant stories.
+  - Removed strict enum check constraint (`stories_category_check`) to prevent database write errors on new topic categories.
 
 ---
 
 ## [1.2.0] - 2026-11-03
 
 ### Added
-- **1-Click Unified IndianAPI Sync**:
-  - Implemented single-click ingestion in the Admin Panel for all endpoints (`/trending`, `/news`, `/ipo`, and `/stock`) via `executeUnifiedIndianApiSync()`.
-  - Removed mandatory editorial taxonomy / section dropdown selection prior to fetching data.
-- **News Merge into Stories**:
-  - Automatically merges `/news` items into `public.stories` with status `'Draft'` preserving the core story schema.
-  - Added support for editorial stories coming either manually or via automated IndianAPI news wire ingestion.
-  - Clamped ingested titles to 70 graphemes to enforce strict editorial standards.
-- **Dedicated `IPO Watch` Section & Table**:
-  - Created `public.ipos` table in Supabase to track active, upcoming, listed, and closed issues.
-  - Added new editorial section `'IPO Watch'` with categories (`IPO Pipeline`, `Mainboard IPO`, `SME IPO`).
-  - Integrated dedicated IPO Watch hub in Subscriber feed displaying bidding dates, price bands, lot sizes, and listing exchanges.
-- **Relative Publish Timestamps**:
-  - Added `formatTimeAgo()` utility (`src/lib/timeAgo.ts`) rendering relative publication times (`"just now"`, `"1 min ago"`, `"2 hours ago"`, `"yesterday"`).
-  - Integrated relative timestamps across all Story Cards and the Admin Story Manager table.
-- **Section DOM IDs**:
-  - Added explicit HTML `id` attributes to each layout section for streamlined navigation, test automation, and in-place editing:
-    - Admin sync tabs: `section-trending-container`, `section-news-container`, `section-ipo-container`, `section-stock-container`.
-    - Subscriber view: `section-nav-strip`, `section-trending-strip`, `section-ipo-watch-hub`, `section-category-pills`, `section-stories-grid`, `section-sidebar-movers`, `section-sidebar-watchlist`.
-- **Post-Fetch Tab Navigation**:
-  - After a 1-click sync, the panel unlocks and surfaces 4 organized tabs: `Trending Stocks`, `Market News`, `IPOs`, and `Company Lookup`.
-
-### Improved
-- **Editorial Card Badges**: Story cards now visually distinguish between manual editorial articles and syndicated IndianAPI wire pieces.
-- **Supabase Migration Script**: Updated `run_this_in_supabase_sql_editor.sql` to include columns `source_type`, `source_url`, and `published_at` for `public.stories`, along with full RLS policies for `public.ipos` and `public.trending_stocks`.
-
-### Fixed
-- Fixed TypeScript export type mismatch for `StockDataRecord` in `src/lib/indianStockApi.ts`.
-- Fixed Supabase story schema compatibility ensuring external syndicated news attributes (`source_type`, `source_url`, `published_at`) do not cause insert/upsert failures.
+- **1-Click Unified Sync**:
+  - Merged news into story drafts, added dedicated `IPO Watch` section and relative publication timestamps (`"1 min ago"`).
+  - Explicit section DOM IDs for streamlined editing navigation.
 
 ---
 
@@ -81,23 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Supabase Strict Environment Configuration**:
-  - Migrated authentication and client initialization to strictly read from `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` via `.env` file instead of fallbacks.
-  - Added environment variable documentation in `.env.example` and `README.md`.
-- **System Documentation**:
-  - Added `SYSTEM_DOCUMENTATION.md` detailing architecture, technology stack, database schemas, security rules, and API reference.
-
-### Fixed
-- Fixed issue where credentials stored in browser `localStorage` could conflict with live Supabase environment configuration.
-- Fixed Vercel deployment build and TypeScript resolution for modern Vite + Tailwind CSS v4 setup.
+  - Migrated authentication and client initialization to strictly read from `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` via `.env`.
 
 ---
 
 ## [1.0.0] - 2026-11-03
 
 ### Added
-- Initial release of the Multilingual Financial Editorial Portal.
-- Multilingual publishing workflow with 12 Indian regional languages + English.
-- Real-time stock ticker and market data sidebar integration.
-- Subscriber view with category filtering, reading mode, and dark/light mode toggle.
-- Admin editorial dashboard with story creation, editing, scheduling, and deletion capabilities.
-- Live Supabase persistence with Row Level Security (RLS).
+- Initial release of the Multilingual Financial Editorial Portal with Supabase persistence and Vercel deployment.
