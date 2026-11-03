@@ -1,12 +1,14 @@
 export type Section =
   | 'Investment Insights'
   | 'Market News'
-  | 'Special Coverage';
+  | 'Special Coverage'
+  | 'IPO Watch';
 
 export const SECTIONS: Section[] = [
   'Investment Insights',
   'Market News',
   'Special Coverage',
+  'IPO Watch',
 ];
 
 export type Category =
@@ -24,7 +26,10 @@ export type Category =
   | 'Economy Watch'
   | 'Personal Finance'
   | 'Insurance'
-  | 'Tax Planning';
+  | 'Tax Planning'
+  | 'IPO Pipeline'
+  | 'Mainboard IPO'
+  | 'SME IPO';
 
 export const CATEGORIES: Category[] = [
   'Financial Planning',
@@ -42,6 +47,9 @@ export const CATEGORIES: Category[] = [
   'Personal Finance',
   'Insurance',
   'Tax Planning',
+  'IPO Pipeline',
+  'Mainboard IPO',
+  'SME IPO',
 ];
 
 export type PublishingStatus = 'Draft' | 'Ready to Publish' | 'Published' | 'Retired';
@@ -71,6 +79,9 @@ export interface Story {
   notification_status: NotificationStatus;
   display_order: number;
   language?: string; // e.g., 'en' | 'ml' | 'hi' | 'ta' | 'ar'
+  source_type?: 'manual' | 'indianapi_news';
+  source_url?: string;
+  published_at?: string; // Specific published timestamp
   created_at: string;
   updated_at: string;
 }
@@ -105,8 +116,8 @@ export interface IndianStockDataRecord {
   summary: string;
   data: any;
   fetched_at: string;
-  section: Section;
-  category: Category;
+  section: Section | string;
+  category: Category | string;
   is_published: boolean;
   display_order: number;
   created_at: string;
@@ -133,6 +144,31 @@ export interface TrendingStockItem {
   overall_rating?: string;
   short_term_trends?: string;
   exchange_type?: string;
+  section: Section | string;
+  category: Category | string;
+  is_published: boolean;
+  display_order: number;
+  fetched_at: string;
+  created_at?: string;
+}
+
+export interface IpoItemRecord {
+  id: string;
+  symbol: string;
+  name: string;
+  status: 'active' | 'upcoming' | 'listed' | 'closed' | 'pre_apply';
+  is_sme: boolean;
+  additional_text?: string;
+  min_price?: number | null;
+  max_price?: number | null;
+  issue_price?: number | null;
+  listing_price?: number | null;
+  listing_gains?: number | string | null;
+  bidding_start_date?: string | null;
+  bidding_end_date?: string | null;
+  listing_date?: string | null;
+  lot_size?: number | null;
+  document_url?: string | null;
   section: Section | string;
   category: Category | string;
   is_published: boolean;

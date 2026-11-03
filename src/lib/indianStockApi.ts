@@ -1,482 +1,248 @@
-/**
- * Indian Stock Market API Service
- * Base URL: https://stock.indianapi.in
- * Rate limit: 500 requests/month — uses 6-hour Supabase caching per endpoint+query
- */
-
 import { getSupabaseClient } from './supabase';
-import { Section, Category, TrendingStockItem } from '../types/story';
+import {
+  Section,
+  Category,
+  Story,
+  TrendingStockItem,
+  IpoItemRecord,
+  IndianApiEndpoint,
+  IndianStockDataRecord,
+} from '../types/story';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+export type StockDataRecord = IndianStockDataRecord;
+import { countGraphemes, generateCanonicalSlug } from './grapheme';
 
 export const INDIAN_API_KEY = 'sk-live-nZAhOd7knZDf9m0LGC4TaqbgW0ipBN3jFhli0hLs';
 export const INDIAN_API_BASE = 'https://stock.indianapi.in';
 
-/** Valid endpoint identifiers for the Indian Stock API */
-export type IndianApiEndpoint = 'trending' | 'news' | 'ipo' | 'stock';
-
-/** Maximum age (ms) before cached data is considered stale */
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
-
+// Local storage keys
 const LOCAL_TRENDING_KEY = 'financial_editorial_trending_stocks_v1';
-
-function getLocalTrendingStocks(): TrendingStockItem[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_TRENDING_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return [];
-}
-
-function setLocalTrendingStocks(items: TrendingStockItem[]) {
-  try {
-    localStorage.setItem(LOCAL_TRENDING_KEY, JSON.stringify(items));
-  } catch {}
-}
-
+const LOCAL_IPOS_KEY = 'financial_editorial_ipos_v1';
 const LOCAL_STOCK_DATA_KEY = 'financial_editorial_indian_stock_data_v1';
+const LOCAL_STORIES_KEY = 'financial_editorial_stories_v1';
 
-function getLocalStockData(): StockDataRecord[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_STOCK_DATA_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return [];
-}
-
-function setLocalStockData(records: StockDataRecord[]) {
-  try {
-    localStorage.setItem(LOCAL_STOCK_DATA_KEY, JSON.stringify(records));
-  } catch {}
-}
-
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface StockDataRecord {
-  id: string;
-  endpoint: IndianApiEndpoint;
-  query?: string;
-  data: unknown;
-  fetched_at: string;
-  section: string;
-  category: string;
-  is_published: boolean;
-  display_order: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface FetchApiResult {
+// -------------------------------------------------------------
+// Typed Results of One-Click Sync
+// -------------------------------------------------------------
+export interface UnifiedSyncResults {
   success: boolean;
-  data?: unknown;
+  timestamp: string;
+  trending: {
+    count: number;
+    data: any;
+  };
+  news: {
+    mergedStoriesCount: number;
+    data: any[];
+  };
+  ipo: {
+    count: number;
+    data: any;
+  };
+  stock: {
+    symbol: string;
+    data: any;
+  };
   error?: string;
-  cached?: boolean;
-  cachedAgeMs?: number;
 }
 
-export interface ApiUsageEntry {
-  endpoint: IndianApiEndpoint;
-  count: number;
-}
+// -------------------------------------------------------------
+// Core Fetch Helper
+// -------------------------------------------------------------
+async function fetchEndpoint(endpoint: string, queryParam: string = ''): Promise<any> {
+  const url = `${INDIAN_API_BASE}/${endpoint}${queryParam}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'x-api-key': INDIAN_API_KEY,
+      Accept: 'application/json',
+    },
+  });
 
-// ---------------------------------------------------------------------------
-// Typed response shapes returned by the API endpoints
-// ---------------------------------------------------------------------------
-
-export interface TrendingStock {
-  symbol?: string;
-  companyName?: string;
-  price?: number | string;
-  change?: number | string;
-  percentChange?: number | string;
-  volume?: number | string;
-  [key: string]: unknown;
-}
-
-export interface NewsArticle {
-  title?: string;
-  summary?: string;
-  description?: string;
-  url?: string;
-  publishedAt?: string;
-  source?: string;
-  [key: string]: unknown;
-}
-
-export interface IpoItem {
-  company?: string;
-  companyName?: string;
-  openDate?: string;
-  closeDate?: string;
-  listingDate?: string;
-  issuePrice?: number | string;
-  lotSize?: number | string;
-  [key: string]: unknown;
-}
-
-export interface StockDetail {
-  companyName?: string;
-  symbol?: string;
-  currentPrice?: number | string;
-  industry?: string;
-  marketCap?: number | string;
-  peRatio?: number | string;
-  eps?: number | string;
-  fiftyTwoWeekHigh?: number | string;
-  fiftyTwoWeekLow?: number | string;
-  [key: string]: unknown;
-}
-
-// ---------------------------------------------------------------------------
-// Core API call
-// ---------------------------------------------------------------------------
-
-/**
- * Fetches data from the Indian Stock API with smart Supabase caching.
- * Before hitting the live API, checks if a cached record exists within the last 6 hours.
- */
-export async function fetchFromIndianApi(
-  endpoint: IndianApiEndpoint,
-  query?: string
-): Promise<FetchApiResult> {
-  const client = getSupabaseClient();
-
-  // --- 1. Check Supabase cache first ---
-  if (client) {
-    try {
-      let cacheQuery = client
-        .from('indian_stock_data')
-        .select('*')
-        .eq('endpoint', endpoint);
-
-      if (endpoint === 'stock' && query) {
-        cacheQuery = cacheQuery.eq('query', query);
-      } else {
-        // For non-stock endpoints, match rows with no query
-        cacheQuery = cacheQuery.is('query', null);
-      }
-
-      const { data: cacheRows, error: cacheError } = await cacheQuery
-        .order('fetched_at', { ascending: false })
-        .limit(1);
-
-      if (!cacheError && cacheRows && cacheRows.length > 0) {
-        const cached = cacheRows[0] as StockDataRecord;
-        const ageMs = Date.now() - new Date(cached.fetched_at).getTime();
-        if (ageMs < CACHE_TTL_MS) {
-          return {
-            success: true,
-            data: cached.data,
-            cached: true,
-            cachedAgeMs: ageMs,
-          };
-        }
-      }
-    } catch {
-      // cache check failed — proceed to live fetch
-    }
+  if (!res.ok) {
+    throw new Error(`API error (${res.status}) on /${endpoint}`);
   }
+  return await res.json();
+}
 
-  // --- 2. Live API fetch ---
+// -------------------------------------------------------------
+// 1. ONE-CLICK UNIFIED FETCH & MERGE ENGINE
+// Fetches /trending, /news, /ipo, /stock in a single click
+// - /news: merged into public.stories (status = 'Draft')
+// - /trending: saved into public.trending_stocks (status = 'Published', clears on every load)
+// - /ipo: saved into public.ipos (status = 'Published', section = 'IPO Watch')
+// - /stock: saved into public.indian_stock_data (status = 'Published')
+// -------------------------------------------------------------
+export async function executeUnifiedIndianApiSync(
+  stockSymbol: string = 'RELIANCE'
+): Promise<UnifiedSyncResults> {
+  const now = new Date().toISOString();
+  const cleanSymbol = (stockSymbol || 'RELIANCE').trim().toUpperCase();
+
   try {
-    let url = `${INDIAN_API_BASE}/${endpoint}`;
-    if (endpoint === 'stock' && query) {
-      url += `?name=${encodeURIComponent(query)}`;
-    }
+    // 1. Fetch all 4 endpoints in parallel
+    const [trendingRaw, newsRaw, ipoRaw, stockRaw] = await Promise.all([
+      fetchEndpoint('trending').catch((err) => ({ error: err.message })),
+      fetchEndpoint('news').catch((err) => []),
+      fetchEndpoint('ipo').catch((err) => ({})),
+      fetchEndpoint('stock', `?name=${encodeURIComponent(cleanSymbol)}`).catch((err) => ({ error: err.message })),
+    ]);
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'x-api-key': INDIAN_API_KEY,
-        'Content-Type': 'application/json',
+    // 2. Process /news -> Merge into Stories database as 'Draft'
+    const newsArticles = Array.isArray(newsRaw) ? newsRaw : [];
+    const mergedStoriesCount = await mergeNewsIntoStories(newsArticles);
+
+    // 3. Process /trending -> Save into trending_stocks table (Published)
+    const trendingCount = await saveTrendingStocksToDedicatedTable(trendingRaw);
+
+    // 4. Process /ipo -> Save into dedicated ipos table (Published)
+    const ipoCount = await saveIposToDedicatedTable(ipoRaw);
+
+    // 5. Process /stock -> Save into indian_stock_data table (Published)
+    await saveCompanyStockLookup(cleanSymbol, stockRaw);
+
+    return {
+      success: true,
+      timestamp: now,
+      trending: {
+        count: trendingCount,
+        data: trendingRaw,
       },
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => response.statusText);
-      return {
-        success: false,
-        error: `API error ${response.status}: ${errText}`,
-      };
-    }
-
-    const data: unknown = await response.json();
-    return { success: true, data, cached: false };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Network error calling IndianAPI';
-    return { success: false, error: message };
+      news: {
+        mergedStoriesCount,
+        data: newsArticles,
+      },
+      ipo: {
+        count: ipoCount,
+        data: ipoRaw,
+      },
+      stock: {
+        symbol: cleanSymbol,
+        data: stockRaw,
+      },
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      timestamp: now,
+      trending: { count: 0, data: null },
+      news: { mergedStoriesCount: 0, data: [] },
+      ipo: { count: 0, data: null },
+      stock: { symbol: cleanSymbol, data: null },
+      error: err?.message || 'Failed executing unified sync',
+    };
   }
 }
 
-// ---------------------------------------------------------------------------
-// Supabase CRUD helpers
-// ---------------------------------------------------------------------------
+// -------------------------------------------------------------
+// 2. MERGE /news INTO STORIES DATABASE (DRAFT)
+// -------------------------------------------------------------
+export async function mergeNewsIntoStories(newsArticles: any[]): Promise<number> {
+  if (!Array.isArray(newsArticles) || newsArticles.length === 0) return 0;
 
-/**
- * Upserts a fetched API response into the indian_stock_data table.
- * Uses the unique index on (endpoint, COALESCE(query, '')) for conflict resolution.
- */
-export async function saveStockDataToSupabase(
-  endpoint: IndianApiEndpoint,
-  query: string | undefined,
-  data: unknown,
-  section: Section | string,
-  category: Category | string
-): Promise<{ success: boolean; record?: StockDataRecord; error?: string; isLocalFallback?: boolean }> {
   const client = getSupabaseClient();
   const now = new Date().toISOString();
 
-  const record: StockDataRecord = {
-    id: crypto.randomUUID(),
-    endpoint,
-    query: query || undefined,
-    data,
-    fetched_at: now,
-    section: section as string,
-    category: category as string,
-    is_published: false,
-    display_order: 0,
-    created_at: now,
-    updated_at: now,
-  };
+  // Map news articles to Story objects
+  const storiesToInsert: Story[] = [];
 
+  for (const item of newsArticles) {
+    const rawTitle = String(item.title || item.heading || '').trim();
+    if (!rawTitle) continue;
+
+    // Enforce 70 grapheme character maximum for heading
+    let heading = rawTitle;
+    if (countGraphemes(heading) > 70) {
+      heading = Array.from(heading).slice(0, 67).join('') + '...';
+    }
+
+    const slug = generateCanonicalSlug(rawTitle) || `market-news-${Date.now()}`;
+    const leadImg =
+      item.image_url ||
+      item.imageUrl ||
+      'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
+
+    const summaryText = item.summary || item.description || '';
+    const fullStoryHtml = `
+      <h2>${rawTitle}</h2>
+      <p class="lead">${summaryText}</p>
+      ${item.url ? `<p><a href="${item.url}" target="_blank" rel="noopener noreferrer">Read original source dispatch on ${item.source || 'Market Desk'} &rarr;</a></p>` : ''}
+    `.trim();
+
+    storiesToInsert.push({
+      id: crypto.randomUUID(),
+      section: 'Market News',
+      category: 'Market Trends',
+      heading,
+      lead_image_url: leadImg,
+      short_description: `<p>${summaryText}</p>`,
+      full_story: fullStoryHtml,
+      canonical_url: slug,
+      keywords: `Market News, ${item.source || 'IndianAPI'}, Stocks, Exchange`,
+      seo_title: rawTitle,
+      seo_description: summaryText.slice(0, 160),
+      publishing_status: 'Draft', // All /news items saved as Draft per requirements
+      notification_status: 'No',
+      display_order: 0,
+      source_type: 'indianapi_news',
+      source_url: item.url,
+      published_at: undefined,
+      created_at: item.pub_date || now,
+      updated_at: now,
+    });
+  }
+
+  // 1. If Supabase is connected: Upsert into public.stories
   if (client) {
     try {
-      // 1. Try upserting directly
-      const payload: any = {
-        endpoint,
-        query: query || null,
-        data,
-        fetched_at: now,
-        section,
-        category,
-        is_published: false,
-        display_order: 0,
-        updated_at: now,
-      };
-
-      const { data: row, error } = await client
-        .from('indian_stock_data')
-        .insert(payload)
-        .select()
-        .single();
-
-      if (!error && row) {
-        return { success: true, record: row as StockDataRecord };
+      for (const story of storiesToInsert) {
+        await client.from('stories').upsert(story, { onConflict: 'canonical_url' });
       }
-
-      // If insert failed because table or constraint issue, report error or fallback
-      if (error) {
-        console.warn('Supabase save error, storing in local fallback:', error.message);
-        // Fall through to local fallback so user action never fails
-      }
-    } catch (err: any) {
-      console.warn('Supabase connection error:', err?.message);
+    } catch (err) {
+      console.warn('Supabase stories upsert warning:', err);
     }
   }
 
-  // Local storage fallback (consistent with stories & market tickers engine)
-  const list = getLocalStockData();
-  const existingIdx = list.findIndex(
-    (r) => r.endpoint === endpoint && (r.query || '') === (query || '')
-  );
-
-  if (existingIdx >= 0) {
-    record.id = list[existingIdx].id;
-    record.created_at = list[existingIdx].created_at;
-    list[existingIdx] = record;
-  } else {
-    list.unshift(record);
-  }
-
-  setLocalStockData(list);
-  return {
-    success: true,
-    record,
-    isLocalFallback: !client,
-  };
-}
-
-/**
- * Fetches saved stock data records from Supabase with optional filters.
- */
-export async function fetchSavedStockData(filters?: {
-  endpoint?: IndianApiEndpoint;
-  section?: string;
-  category?: string;
-  is_published?: boolean;
-}): Promise<StockDataRecord[]> {
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      let query = client
-        .from('indian_stock_data')
-        .select('*')
-        .order('fetched_at', { ascending: false });
-
-      if (filters?.endpoint) {
-        query = query.eq('endpoint', filters.endpoint);
-      }
-      if (filters?.section) {
-        query = query.eq('section', filters.section);
-      }
-      if (filters?.category) {
-        query = query.eq('category', filters.category);
-      }
-      if (filters?.is_published !== undefined) {
-        query = query.eq('is_published', filters.is_published);
-      }
-
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) {
-        return data as StockDataRecord[];
-      }
-    } catch {}
-  }
-
-  // Local fallback
-  let list = getLocalStockData();
-  if (filters?.endpoint) {
-    list = list.filter((r) => r.endpoint === filters.endpoint);
-  }
-  if (filters?.section) {
-    list = list.filter((r) => r.section === filters.section);
-  }
-  if (filters?.category) {
-    list = list.filter((r) => r.category === filters.category);
-  }
-  if (filters?.is_published !== undefined) {
-    list = list.filter((r) => r.is_published === filters.is_published);
-  }
-  return list;
-}
-
-/**
- * Toggles the is_published state of a stock data record.
- */
-export async function updateStockDataPublishStatus(
-  id: string,
-  is_published: boolean
-): Promise<{ success: boolean; error?: string }> {
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      const { error } = await client
-        .from('indian_stock_data')
-        .update({ is_published, updated_at: new Date().toISOString() })
-        .eq('id', id);
-
-      if (!error) return { success: true };
-    } catch {}
-  }
-
-  // Local update
-  const list = getLocalStockData();
-  const item = list.find((r) => r.id === id);
-  if (item) {
-    item.is_published = is_published;
-    item.updated_at = new Date().toISOString();
-    setLocalStockData(list);
-  }
-  return { success: true };
-}
-
-/**
- * Deletes a stock data record by ID.
- */
-export async function deleteStockData(
-  id: string
-): Promise<{ success: boolean; error?: string }> {
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      const { error } = await client.from('indian_stock_data').delete().eq('id', id);
-      if (!error) return { success: true };
-    } catch {}
-  }
-
-  const list = getLocalStockData().filter((r) => r.id !== id);
-  setLocalStockData(list);
-  return { success: true };
-}
-
-/**
- * Counts today's actual API fetches (non-cached records) from Supabase,
- * grouped by endpoint. Used for the API usage banner.
- */
-export async function getApiUsageEstimate(): Promise<{
-  totalThisMonth: number;
-  byEndpoint: ApiUsageEntry[];
-  remaining: number;
-}> {
-  const client = getSupabaseClient();
-  if (!client) {
-    return { totalThisMonth: 0, byEndpoint: [], remaining: 500 };
-  }
-
+  // 2. Also update local storage cache
   try {
-    // Start of current month UTC (e.g., 2026-11-01T00:00:00.000Z)
-    const now = new Date();
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const rawLocal = localStorage.getItem(LOCAL_STORIES_KEY);
+    const localStories: Story[] = rawLocal ? JSON.parse(rawLocal) : [];
 
-    const { data, error } = await client
-      .from('indian_stock_data')
-      .select('endpoint, fetched_at')
-      .gte('fetched_at', monthStart.toISOString());
+    storiesToInsert.forEach((newStory) => {
+      const idx = localStories.findIndex(
+        (s) => s.canonical_url.toLowerCase() === newStory.canonical_url.toLowerCase()
+      );
+      if (idx >= 0) {
+        localStories[idx] = { ...localStories[idx], ...newStory, id: localStories[idx].id };
+      } else {
+        localStories.unshift(newStory);
+      }
+    });
+    localStorage.setItem(LOCAL_STORIES_KEY, JSON.stringify(localStories));
+  } catch {}
 
-    if (error || !data) {
-      return { totalThisMonth: 0, byEndpoint: [], remaining: 500 };
-    }
-
-    // Count per endpoint
-    const countMap: Record<string, number> = {};
-    for (const row of data as { endpoint: string; fetched_at: string }[]) {
-      countMap[row.endpoint] = (countMap[row.endpoint] ?? 0) + 1;
-    }
-
-    const byEndpoint: ApiUsageEntry[] = (Object.entries(countMap) as [IndianApiEndpoint, number][]).map(
-      ([endpoint, count]) => ({ endpoint, count })
-    );
-
-    const totalThisMonth = data.length;
-    return {
-      totalThisMonth,
-      byEndpoint,
-      remaining: Math.max(0, 500 - totalThisMonth),
-    };
-  } catch {
-    return { totalThisMonth: 0, byEndpoint: [], remaining: 500 };
-  }
+  return storiesToInsert.length;
 }
 
-
-
-/**
- * Clears the public.trending_stocks table and repopulates it with the latest
- * top gainers and losers from IndianAPI.
- */
+// -------------------------------------------------------------
+// 3. SAVE /trending INTO DEDICATED TABLE (PUBLISHED)
+// -------------------------------------------------------------
 export async function saveTrendingStocksToDedicatedTable(
-  apiResponse: any,
+  trendingRaw: any,
   section: Section | string = 'Market News',
   category: Category | string = 'Market Trends'
-): Promise<{ success: boolean; count?: number; error?: string }> {
+): Promise<number> {
   const client = getSupabaseClient();
   const now = new Date().toISOString();
 
-  // Extract gainers and losers from response
-  const trendingContainer = apiResponse?.trending_stocks || apiResponse;
+  const trendingContainer = trendingRaw?.trending_stocks || trendingRaw;
   const gainers: any[] = Array.isArray(trendingContainer?.top_gainers) ? trendingContainer.top_gainers : [];
   const losers: any[] = Array.isArray(trendingContainer?.top_losers) ? trendingContainer.top_losers : [];
 
-  const itemsToInsert: TrendingStockItem[] = [];
+  const items: TrendingStockItem[] = [];
 
   gainers.forEach((g: any, idx: number) => {
-    itemsToInsert.push({
+    items.push({
       id: crypto.randomUUID(),
       ticker_id: g.ticker_id || '',
       company_name: g.company_name || 'Stock',
@@ -494,7 +260,7 @@ export async function saveTrendingStocksToDedicatedTable(
       exchange_type: g.exchange_type || 'BSE',
       section,
       category,
-      is_published: true,
+      is_published: true, // Published
       display_order: idx + 1,
       fetched_at: now,
       created_at: now,
@@ -502,7 +268,7 @@ export async function saveTrendingStocksToDedicatedTable(
   });
 
   losers.forEach((l: any, idx: number) => {
-    itemsToInsert.push({
+    items.push({
       id: crypto.randomUUID(),
       ticker_id: l.ticker_id || '',
       company_name: l.company_name || 'Stock',
@@ -520,64 +286,249 @@ export async function saveTrendingStocksToDedicatedTable(
       exchange_type: l.exchange_type || 'BSE',
       section,
       category,
-      is_published: true,
+      is_published: true, // Published
       display_order: 100 + idx + 1,
       fetched_at: now,
       created_at: now,
     });
   });
 
-  if (itemsToInsert.length === 0) {
-    return { success: false, error: 'No trending stocks found in API response.' };
-  }
+  if (items.length === 0) return 0;
 
-  // 1. Try Supabase: Clear table and re-insert
+  // Supabase: clear table on every load and insert fresh records
   if (client) {
     try {
-      // Clear existing records in trending_stocks on every load
       await client.from('trending_stocks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-      const { data, error } = await client.from('trending_stocks').insert(itemsToInsert).select();
-      if (!error) {
-        return { success: true, count: data?.length || itemsToInsert.length };
-      }
-      console.warn('Supabase trending insert warning:', error.message);
-    } catch (err: any) {
-      console.warn('Supabase trending error:', err?.message);
+      await client.from('trending_stocks').insert(items);
+    } catch (err) {
+      console.warn('Supabase trending error:', err);
     }
   }
 
-  // 2. Local Fallback: Clear and save
-  setLocalTrendingStocks(itemsToInsert);
-  return { success: true, count: itemsToInsert.length };
+  // Local storage
+  try {
+    localStorage.setItem(LOCAL_TRENDING_KEY, JSON.stringify(items));
+  } catch {}
+
+  return items.length;
 }
 
-/**
- * Fetches current trending stocks from public.trending_stocks or local storage
- */
+// -------------------------------------------------------------
+// 4. SAVE /ipo INTO DEDICATED IPOS TABLE (PUBLISHED, SECTION: IPO Watch)
+// -------------------------------------------------------------
+export async function saveIposToDedicatedTable(
+  ipoRaw: any,
+  section: Section | string = 'IPO Watch',
+  category: Category | string = 'IPO Pipeline'
+): Promise<number> {
+  const client = getSupabaseClient();
+  const now = new Date().toISOString();
+
+  const categories: Array<{ key: 'active' | 'upcoming' | 'listed' | 'closed' | 'pre_apply'; label: string }> = [
+    { key: 'active', label: 'active' },
+    { key: 'upcoming', label: 'upcoming' },
+    { key: 'listed', label: 'listed' },
+    { key: 'closed', label: 'closed' },
+  ];
+
+  const items: IpoItemRecord[] = [];
+  let order = 1;
+
+  for (const cat of categories) {
+    const list = Array.isArray(ipoRaw?.[cat.key]) ? ipoRaw[cat.key] : [];
+    for (const ipo of list) {
+      const isSme = Boolean(ipo.is_sme);
+      items.push({
+        id: crypto.randomUUID(),
+        symbol: ipo.symbol || ipo.name || 'IPO',
+        name: ipo.name || ipo.symbol || 'Public Issue',
+        status: cat.key,
+        is_sme: isSme,
+        additional_text: ipo.additional_text || undefined,
+        min_price: ipo.min_price != null ? Number(ipo.min_price) : null,
+        max_price: ipo.max_price != null ? Number(ipo.max_price) : null,
+        issue_price: ipo.issue_price != null ? Number(ipo.issue_price) : null,
+        listing_price: ipo.listing_price != null ? Number(ipo.listing_price) : null,
+        listing_gains: ipo.listing_gains || null,
+        bidding_start_date: ipo.bidding_start_date || null,
+        bidding_end_date: ipo.bidding_end_date || null,
+        listing_date: ipo.listing_date || null,
+        lot_size: ipo.lot_size != null ? Number(ipo.lot_size) : null,
+        document_url: ipo.document_url || null,
+        section,
+        category: isSme ? 'SME IPO' : 'Mainboard IPO',
+        is_published: true, // Published
+        display_order: order++,
+        fetched_at: now,
+        created_at: now,
+      });
+    }
+  }
+
+  if (items.length === 0) return 0;
+
+  // Supabase: clear table on every load and insert fresh records
+  if (client) {
+    try {
+      await client.from('ipos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await client.from('ipos').insert(items);
+    } catch (err) {
+      console.warn('Supabase ipos error:', err);
+    }
+  }
+
+  // Local storage
+  try {
+    localStorage.setItem(LOCAL_IPOS_KEY, JSON.stringify(items));
+  } catch {}
+
+  return items.length;
+}
+
+// -------------------------------------------------------------
+// 5. SAVE /stock INTO INDIAN STOCK DATA TABLE (PUBLISHED)
+// -------------------------------------------------------------
+export async function saveCompanyStockLookup(
+  symbol: string,
+  stockData: any
+): Promise<boolean> {
+  const client = getSupabaseClient();
+  const now = new Date().toISOString();
+
+  const record = {
+    id: crypto.randomUUID(),
+    endpoint: 'stock',
+    query: symbol,
+    title: `${symbol} Company Overview & Key Metrics`,
+    summary: typeof stockData === 'object' && stockData?.companyName ? `${stockData.companyName} (${symbol}) fundamental dossier.` : 'Company stock details.',
+    data: stockData,
+    fetched_at: now,
+    section: 'Investment Insights',
+    category: 'Stock Recommendations',
+    is_published: true,
+    display_order: 1,
+    created_at: now,
+    updated_at: now,
+  };
+
+  if (client) {
+    try {
+      await client.from('indian_stock_data').insert(record);
+    } catch (err) {
+      console.warn('Supabase stock lookup error:', err);
+    }
+  }
+
+  try {
+    const raw = localStorage.getItem(LOCAL_STOCK_DATA_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    list.unshift(record);
+    localStorage.setItem(LOCAL_STOCK_DATA_KEY, JSON.stringify(list));
+  } catch {}
+
+  return true;
+}
+
+// -------------------------------------------------------------
+// READ HELPERS FOR CONSUMER FEEDS & PANELS
+// -------------------------------------------------------------
 export async function fetchTrendingStocks(onlyPublished: boolean = true): Promise<TrendingStockItem[]> {
   const client = getSupabaseClient();
   if (client) {
     try {
-      let query = client
-        .from('trending_stocks')
-        .select('*')
-        .order('display_order', { ascending: true });
-
-      if (onlyPublished) {
-        query = query.eq('is_published', true);
-      }
-
+      let query = client.from('trending_stocks').select('*').order('display_order', { ascending: true });
+      if (onlyPublished) query = query.eq('is_published', true);
       const { data, error } = await query;
-      if (!error && data && data.length > 0) {
-        return data as TrendingStockItem[];
-      }
+      if (!error && data && data.length > 0) return data as TrendingStockItem[];
     } catch {}
   }
 
-  const list = getLocalTrendingStocks();
-  if (onlyPublished) {
-    return list.filter((item) => item.is_published);
+  try {
+    const raw = localStorage.getItem(LOCAL_TRENDING_KEY);
+    const list: TrendingStockItem[] = raw ? JSON.parse(raw) : [];
+    return onlyPublished ? list.filter((i) => i.is_published) : list;
+  } catch {
+    return [];
   }
-  return list;
+}
+
+export async function fetchIpos(onlyPublished: boolean = true): Promise<IpoItemRecord[]> {
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      let query = client.from('ipos').select('*').order('display_order', { ascending: true });
+      if (onlyPublished) query = query.eq('is_published', true);
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) return data as IpoItemRecord[];
+    } catch {}
+  }
+
+  try {
+    const raw = localStorage.getItem(LOCAL_IPOS_KEY);
+    const list: IpoItemRecord[] = raw ? JSON.parse(raw) : [];
+    return onlyPublished ? list.filter((i) => i.is_published) : list;
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchSavedStockData(filters?: {
+  endpoint?: IndianApiEndpoint;
+  section?: string;
+  category?: string;
+  is_published?: boolean;
+}): Promise<any[]> {
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      let query = client.from('indian_stock_data').select('*').order('fetched_at', { ascending: false });
+      if (filters?.endpoint) query = query.eq('endpoint', filters.endpoint);
+      if (filters?.section) query = query.eq('section', filters.section);
+      if (filters?.category) query = query.eq('category', filters.category);
+      if (filters?.is_published !== undefined) query = query.eq('is_published', filters.is_published);
+
+      const { data, error } = await query;
+      if (!error && data) return data;
+    } catch {}
+  }
+
+  try {
+    const raw = localStorage.getItem(LOCAL_STOCK_DATA_KEY);
+    let list: any[] = raw ? JSON.parse(raw) : [];
+    if (filters?.endpoint) list = list.filter((r) => r.endpoint === filters.endpoint);
+    if (filters?.section) list = list.filter((r) => r.section === filters.section);
+    if (filters?.category) list = list.filter((r) => r.category === filters.category);
+    if (filters?.is_published !== undefined) list = list.filter((r) => r.is_published === filters.is_published);
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+export async function getApiUsageEstimate(): Promise<{
+  totalThisMonth: number;
+  remaining: number;
+}> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { totalThisMonth: 0, remaining: 500 };
+  }
+
+  try {
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+    const { data, error } = await client
+      .from('indian_stock_data')
+      .select('endpoint, fetched_at')
+      .gte('fetched_at', monthStart.toISOString());
+
+    const total = !error && data ? data.length : 0;
+    return {
+      totalThisMonth: total,
+      remaining: Math.max(0, 500 - total),
+    };
+  } catch {
+    return { totalThisMonth: 0, remaining: 500 };
+  }
 }

@@ -13,6 +13,7 @@ import {
   MarketTickerFormData,
 } from '../types/story';
 import { RichTextEditor } from './RichTextEditor';
+import { formatTimeAgo } from '../lib/timeAgo';
 import { StockDataPanel } from './StockDataPanel';
 import {
   countGraphemes,
@@ -687,6 +688,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                   <span className="text-[#6A1B9A] font-semibold">
                                     {script.name}
                                   </span>
+                                  {story.source_type === 'indianapi_news' && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="bg-[#FAF7FC] text-[#6A1B9A] font-bold px-1.5 py-0.2 rounded border border-[#6A1B9A]/30">
+                                        IndianAPI News
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -727,9 +736,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             {story.display_order}
                           </td>
 
-                          {/* Date */}
-                          <td className="py-3 px-3 text-[11px] text-[#8A92A0] whitespace-nowrap">
-                            {new Date(story.created_at).toLocaleDateString()}
+                          {/* Date with Relative Time */}
+                          <td className="py-3 px-3 text-[11px] text-[#8A92A0] whitespace-nowrap" title={new Date(story.created_at).toLocaleString()}>
+                            <span className="font-semibold text-[#1E2229] block">{formatTimeAgo(story.created_at)}</span>
+                            <span className="text-[10px] text-[#8A92A0]">{new Date(story.created_at).toLocaleDateString()}</span>
                           </td>
 
                           {/* Actions */}
@@ -1278,7 +1288,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     {/* TAB 3: INDIAN STOCK API STUDIO */}
     {adminTab === 'stocks' && (
-      <StockDataPanel onNotify={(msg) => setMessage(msg)} />
+      <StockDataPanel onNotify={(msg) => setMessage(msg)} onEditStory={handleStartEdit} />
     )}
 
     {/* TAB 2: LIVE MARKETS TICKER MANAGER */}

@@ -5,8 +5,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Story, StoryFormData, MarketTickerItem } from './types/story';
-import { fetchSavedStockData, fetchTrendingStocks, StockDataRecord } from './lib/indianStockApi';
-import { TrendingStockItem } from './types/story';
+import { fetchSavedStockData, fetchTrendingStocks, fetchIpos, StockDataRecord } from './lib/indianStockApi';
+import { TrendingStockItem, IpoItemRecord } from './types/story';
 import {
   fetchPublishedStories,
   fetchAllStoriesForAdmin,
@@ -43,6 +43,7 @@ export default function App() {
   const [marketTickers, setMarketTickers] = useState<MarketTickerItem[]>([]);
   const [publishedStockData, setPublishedStockData] = useState<StockDataRecord[]>([]);
   const [publishedTrendingStocks, setPublishedTrendingStocks] = useState<TrendingStockItem[]>([]);
+  const [publishedIpos, setPublishedIpos] = useState<IpoItemRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modals
@@ -88,19 +89,21 @@ export default function App() {
     } catch {}
   }, []);
 
-  // Load published Indian stock data & trending stocks
+  // Load published Indian stock data, trending stocks & IPOs
   const loadPublishedStockData = useCallback(async () => {
     try {
-      const [generalData, trendingData] = await Promise.all([
+      const [generalData, trendingData, ipoData] = await Promise.all([
         fetchSavedStockData({
           is_published: true,
           section: selectedSection !== 'All' ? selectedSection : undefined,
           category: selectedCategory !== 'All' ? selectedCategory : undefined,
         }),
         fetchTrendingStocks(true),
+        fetchIpos(true),
       ]);
       setPublishedStockData(generalData);
       setPublishedTrendingStocks(trendingData);
+      setPublishedIpos(ipoData);
     } catch {}
   }, [selectedSection, selectedCategory]);
 
@@ -236,8 +239,8 @@ export default function App() {
             onCategoryChange={setSelectedCategory}
             onSelectStory={handleSelectStory}
             onOpenSupabaseModal={() => setSupabaseModalOpen(true)}
-            publishedStockData={publishedStockData}
             publishedTrendingStocks={publishedTrendingStocks}
+            publishedIpos={publishedIpos}
           />
         )}
 

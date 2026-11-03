@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Story } from '../types/story';
-import { Bookmark, Share2, ArrowRight, Clock, Check } from 'lucide-react';
+import { Bookmark, Share2, ArrowRight, Clock, Check, FileText } from 'lucide-react';
 import { detectScript } from '../lib/grapheme';
+import { formatTimeAgo } from '../lib/timeAgo';
 
 interface StoryCardProps {
   story: Story;
@@ -20,15 +21,6 @@ export const StoryCard: React.FC<StoryCardProps> = ({
 
   const script = detectScript(story.heading);
   const isRTL = script.isRTL;
-
-  // Format date: e.g. "OCT 8, 2026"
-  const formattedDate = new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-    .format(new Date(story.created_at))
-    .toUpperCase();
 
   // Clean short description plain text snippet
   const snippet = story.short_description
@@ -50,32 +42,42 @@ export const StoryCard: React.FC<StoryCardProps> = ({
     setBookmarked(!bookmarked);
   };
 
-  const fallbackImage =
-    'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
+  // Determine relative published time (e.g., "1 min ago", "2 hours ago")
+  const displayTimeAgo = formatTimeAgo(story.published_at || story.created_at);
 
   return (
     <article
       onClick={() => onSelectStory(story.canonical_url)}
-      className={`group bg-white rounded border border-[#E2E4E8] hover:border-[#C8CBD0] transition-all duration-200 cursor-pointer overflow-hidden flex flex-col justify-between shadow-[0_1px_3px_rgba(30,34,41,0.04)] hover:shadow-[0_8px_20px_-4px_rgba(30,34,41,0.08)] ${
-        featured ? 'md:col-span-2 lg:col-span-2' : ''
+      className={`group cursor-pointer bg-white rounded-md border border-[#E2E4E8] hover:border-[#6A1B9A]/40 transition-all duration-200 overflow-hidden flex flex-col justify-between shadow-[0_1px_3px_rgba(30,34,41,0.04)] hover:shadow-[0_4px_12px_rgba(106,27,154,0.08)] ${
+        featured ? 'sm:col-span-2' : ''
       }`}
     >
       <div>
-        {/* Lead Image Container: Strictly Calibrated 560x320 Aspect Ratio (7:4) */}
-        <div className="relative w-full aspect-[7/4] overflow-hidden bg-[#EBEEF7]">
+        {/* Lead Image Container */}
+        <div className="relative aspect-[7/4] bg-[#EBEEF7] overflow-hidden">
           <img
-            src={imgError || !story.lead_image_url ? fallbackImage : story.lead_image_url}
+            src={imgError ? 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80' : story.lead_image_url}
             alt={story.heading}
             onError={() => setImgError(true)}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
             loading="lazy"
-            className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-103"
           />
 
-          {/* Section Overlay Chip */}
+          {/* Section badge on top-left of image */}
           <div className="absolute top-3 left-3 flex items-center gap-1.5">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-[#181C23]/80 backdrop-blur-xs text-white shadow-xs">
+            <span className="px-2.5 py-1 rounded text-[11px] font-bold tracking-wider uppercase bg-[#181C23]/80 backdrop-blur-xs text-white shadow-xs">
               {story.section}
             </span>
+
+            {story.source_type === 'indianapi_news' && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#0E8A54]/90 text-white shadow-xs">
+                IndianAPI Wire
+              </span>
+            )}
+          </div>
+
+          {/* Script Badge on top-right */}
+          <div className="absolute top-3 right-3">
             {script.code !== 'en' && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#6A1B9A]/90 text-white shadow-xs">
                 {script.name.split(' ')[0]}
@@ -86,17 +88,21 @@ export const StoryCard: React.FC<StoryCardProps> = ({
 
         {/* Card Content with 20px - 24px inner padding */}
         <div className="p-5 sm:p-6 flex flex-col flex-1" dir={isRTL ? 'rtl' : 'ltr'}>
-          {/* Header Line: Category Pill opposite Muted Timestamp */}
+          {/* Header Line: Category Pill opposite Relative Timestamp */}
           <div className="flex items-center justify-between gap-2 mb-3">
             <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase text-[#6A1B9A] bg-[#6A1B9A]/5 border border-[#6A1B9A]/20">
               {story.category}
             </span>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#8A92A0]">
-              {formattedDate}
+            <span
+              className="text-[11px] font-semibold uppercase tracking-wider text-[#8A92A0] flex items-center gap-1"
+              title={new Date(story.created_at).toLocaleString()}
+            >
+              <Clock className="w-3 h-3 text-[#8A92A0]" />
+              <span>{displayTimeAgo}</span>
             </span>
           </div>
 
-          {/* Heading (Max 70 grapheme characters, bold, crisp baseline) */}
+          {/* Heading */}
           <h2
             className={`font-['Open_Sans'] font-bold text-[#1E2229] group-hover:text-[#6A1B9A] transition-colors line-clamp-2 leading-snug tracking-tight mb-2.5 ${
               featured ? 'text-xl sm:text-2xl' : 'text-lg sm:text-[19px]'
@@ -112,16 +118,18 @@ export const StoryCard: React.FC<StoryCardProps> = ({
         </div>
       </div>
 
-      {/* Footer Strip: Reading time, actions & Read Full Story */}
+      {/* Footer Strip */}
       <div className="px-5 sm:px-6 pb-5 pt-3 border-t border-[#E2E4E8]/60 flex items-center justify-between text-xs text-[#58606E] mt-auto">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1 font-medium text-[11px] text-[#8A92A0]">
-            <Clock className="w-3 h-3 text-[#58606E]" />
-            <span>3 min read</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-[#6A1B9A] group-hover:underline inline-flex items-center gap-1">
+            <span>Read full story</span>
+            <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
           </span>
 
-          {story.notification_status === 'Yes' && (
-            <span className="w-1.5 h-1.5 rounded-full bg-[#0E8A54]" title="Notification Broadcast Enabled"></span>
+          {story.publishing_status === 'Draft' && (
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FFF8E1] text-[#B78103]">
+              Draft
+            </span>
           )}
         </div>
 
@@ -143,14 +151,8 @@ export const StoryCard: React.FC<StoryCardProps> = ({
               bookmarked ? 'text-[#6A1B9A]' : 'text-[#58606E] hover:text-[#6A1B9A]'
             }`}
           >
-            <Bookmark className={`w-3.5 h-3.5 ${bookmarked ? 'fill-[#6A1B9A]' : ''}`} />
+            <Bookmark className={`w-3.5 h-3.5 ${bookmarked ? 'fill-current' : ''}`} />
           </button>
-
-          {/* Ghost Action Button: Read Full Story */}
-          <span className="inline-flex items-center gap-1 font-bold text-xs text-[#6A1B9A] group-hover:translate-x-0.5 transition-transform ml-1">
-            <span>Read Story</span>
-            <ArrowRight className="w-3 h-3" />
-          </span>
         </div>
       </div>
     </article>
