@@ -5,6 +5,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Story, StoryFormData, MarketTickerItem } from './types/story';
+import { fetchSavedStockData, fetchTrendingStocks, StockDataRecord } from './lib/indianStockApi';
+import { TrendingStockItem } from './types/story';
 import {
   fetchPublishedStories,
   fetchAllStoriesForAdmin,
@@ -25,7 +27,7 @@ export default function App() {
   // Navigation & View state
   const [currentView, setCurrentView] = useState<'feed' | 'admin' | 'article'>('feed');
   const [currentCanonicalUrl, setCurrentCanonicalUrl] = useState<string | null>(null);
-  const [adminTab, setAdminTab] = useState<'stories' | 'markets'>('stories');
+  const [adminTab, setAdminTab] = useState<'stories' | 'markets' | 'stocks'>('stories');
 
   // Filter & Search state
   const [selectedSection, setSelectedSection] = useState<string>('All');
@@ -39,6 +41,8 @@ export default function App() {
   const [activeArticle, setActiveArticle] = useState<Story | null>(null);
   const [activeEditingStory, setActiveEditingStory] = useState<Story | null>(null);
   const [marketTickers, setMarketTickers] = useState<MarketTickerItem[]>([]);
+  const [publishedStockData, setPublishedStockData] = useState<StockDataRecord[]>([]);
+  const [publishedTrendingStocks, setPublishedTrendingStocks] = useState<TrendingStockItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modals
@@ -84,14 +88,31 @@ export default function App() {
     } catch {}
   }, []);
 
+  // Load published Indian stock data & trending stocks
+  const loadPublishedStockData = useCallback(async () => {
+    try {
+      const [generalData, trendingData] = await Promise.all([
+        fetchSavedStockData({
+          is_published: true,
+          section: selectedSection !== 'All' ? selectedSection : undefined,
+          category: selectedCategory !== 'All' ? selectedCategory : undefined,
+        }),
+        fetchTrendingStocks(true),
+      ]);
+      setPublishedStockData(generalData);
+      setPublishedTrendingStocks(trendingData);
+    } catch {}
+  }, [selectedSection, selectedCategory]);
+
   // Reload based on view
   useEffect(() => {
     if (currentView === 'feed') {
       loadSubscriberStories();
+      loadPublishedStockData();
     } else if (currentView === 'admin') {
       loadAdminStories();
     }
-  }, [currentView, loadSubscriberStories, loadAdminStories]);
+  }, [currentView, loadSubscriberStories, loadAdminStories, loadPublishedStockData]);
 
   useEffect(() => {
     loadMarketTickers();
@@ -215,6 +236,8 @@ export default function App() {
             onCategoryChange={setSelectedCategory}
             onSelectStory={handleSelectStory}
             onOpenSupabaseModal={() => setSupabaseModalOpen(true)}
+            publishedStockData={publishedStockData}
+            publishedTrendingStocks={publishedTrendingStocks}
           />
         )}
 

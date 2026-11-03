@@ -13,6 +13,7 @@ import {
   MarketTickerFormData,
 } from '../types/story';
 import { RichTextEditor } from './RichTextEditor';
+import { StockDataPanel } from './StockDataPanel';
 import {
   countGraphemes,
   generateCanonicalSlug,
@@ -53,6 +54,7 @@ import {
   TrendingDown,
   Activity,
   BarChart2,
+  Globe,
   Settings2,
 } from 'lucide-react';
 
@@ -66,7 +68,7 @@ interface AdminPanelProps {
   onClearActiveStory: () => void;
   marketTickers: MarketTickerItem[];
   onRefreshMarketTickers: () => Promise<void>;
-  initialAdminTab?: 'stories' | 'markets';
+  initialAdminTab?: 'stories' | 'markets' | 'stocks';
 }
 
 
@@ -109,7 +111,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onRefreshMarketTickers,
   initialAdminTab = 'stories',
 }) => {
-  const [adminTab, setAdminTab] = useState<'stories' | 'markets'>(initialAdminTab);
+  const [adminTab, setAdminTab] = useState<'stories' | 'markets' | 'stocks'>(initialAdminTab);
   // Mode: 'list' (dashboard) or 'editor' (form)
   const [mode, setMode] = useState<'list' | 'editor'>('list');
 
@@ -530,6 +532,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <span>Live Markets Ticker</span>
           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F5EE] text-[#0E8A54]">
             {marketTickers?.length || 0}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setAdminTab('stocks');
+            setMessage(null);
+          }}
+          className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-colors ${
+            adminTab === 'stocks'
+              ? 'border-[#6A1B9A] text-[#6A1B9A]'
+              : 'border-transparent text-[#58606E] hover:text-[#1E2229]'
+          }`}
+        >
+          <Globe className="w-4 h-4 text-[#6A1B9A]" />
+          <span>IndianAPI Stock Data</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF7FC] text-[#6A1B9A] border border-[#6A1B9A]/30">
+            500/mo
           </span>
         </button>
       </div>
@@ -1253,6 +1274,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </form>
       )}
       </>
+    )}
+
+    {/* TAB 3: INDIAN STOCK API STUDIO */}
+    {adminTab === 'stocks' && (
+      <StockDataPanel onNotify={(msg) => setMessage(msg)} />
     )}
 
     {/* TAB 2: LIVE MARKETS TICKER MANAGER */}

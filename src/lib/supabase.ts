@@ -15,7 +15,10 @@ export interface SupabaseConfig {
  * Retrieves Supabase credentials strictly from environment variables (Vite / Next.js .env).
  * Does NOT persist credentials in browser localStorage.
  */
+const LOCAL_SUPABASE_CONFIG_KEY = 'financial_editorial_supabase_credentials_v1';
+
 export function getSavedSupabaseConfig(): SupabaseConfig {
+  // 1. Check environment variables
   const envUrl =
     (import.meta as any).env?.VITE_SUPABASE_URL ||
     (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_URL ||
@@ -25,10 +28,42 @@ export function getSavedSupabaseConfig(): SupabaseConfig {
     (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     '';
 
-  return {
-    url: typeof envUrl === 'string' && envUrl.startsWith('http') ? envUrl.trim() : '',
-    anonKey: typeof envKey === 'string' && envKey.length > 10 ? envKey.trim() : '',
-  };
+  if (typeof envUrl === 'string' && envUrl.startsWith('http') && typeof envKey === 'string' && envKey.length > 10) {
+    return { url: envUrl.trim(), anonKey: envKey.trim() };
+  }
+
+  // 2. Check browser localStorage credentials saved via Supabase Setup Modal
+  try {
+    const raw = localStorage.getItem(LOCAL_SUPABASE_CONFIG_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.url && parsed.anonKey) {
+        return {
+          url: String(parsed.url).trim(),
+          anonKey: String(parsed.anonKey).trim(),
+        };
+      }
+    }
+  } catch {}
+
+  return { url: '', anonKey: '' };
+}
+
+export function saveSupabaseConfig(url: string, anonKey: string) {
+  try {
+    localStorage.setItem(
+      LOCAL_SUPABASE_CONFIG_KEY,
+      JSON.stringify({ url: url.trim(), anonKey: anonKey.trim() })
+    );
+    cachedClient = null; // Invalidate cached client to recreate with new credentials
+  } catch {}
+}
+
+export function clearSupabaseConfig() {
+  try {
+    localStorage.removeItem(LOCAL_SUPABASE_CONFIG_KEY);
+    cachedClient = null;
+  } catch {}
 }
 
 

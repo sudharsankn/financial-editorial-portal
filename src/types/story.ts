@@ -95,3 +95,48 @@ export type MarketTickerFormData = Omit<MarketTickerItem, 'id' | 'created_at' | 
   id?: string;
 };
 
+export type IndianApiEndpoint = 'trending' | 'news' | 'ipo' | 'stock';
+
+export interface IndianStockDataRecord {
+  id: string;
+  endpoint: IndianApiEndpoint;
+  query?: string;
+  title: string;
+  summary: string;
+  data: any;
+  fetched_at: string;
+  section: Section;
+  category: Category;
+  is_published: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type IndianStockDataFormData = Omit<IndianStockDataRecord, 'id' | 'created_at' | 'updated_at'> & {
+  id?: string;
+};
+
+export interface TrendingStockItem {
+  id: string;
+  ticker_id?: string;
+  company_name: string;
+  price: string;
+  percent_change: string;
+  net_change?: string;
+  trend_type: 'gainer' | 'loser';
+  high?: string;
+  low?: string;
+  open?: string;
+  close?: string;
+  volume?: string;
+  overall_rating?: string;
+  short_term_trends?: string;
+  exchange_type?: string;
+  section: Section | string;
+  category: Category | string;
+  is_published: boolean;
+  display_order: number;
+  fetched_at: string;
+  created_at?: string;
+}
