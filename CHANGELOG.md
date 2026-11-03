@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-11-03
+
+### Added
+- **Yahoo Finance Free Market Engine (Approach A)**:
+  - Installed `yahoo-finance2` and created serverless backend endpoint `api/yahoo.ts` for Vercel and Node.js environments.
+  - Added support for single quotes (`/api/yahoo?symbol=RELIANCE`), batch quotes (`/api/yahoo?symbols=^NSEI,TCS,INFY`), and company valuation summaries (`/api/yahoo?symbol=RELIANCE&action=summary`).
+  - Automatically maps Indian tickers to `.NS` (NSE) and `.BO` (BSE) with full CORS handling.
+  - Implemented client SDK module `src/lib/yahooFinance.ts` with browser-safe fallback, Rupee currency formatting (`formatIndianRupee`), and market capitalization formatting in Crores (`formatMarketCapCrores`).
+
+### Improved
+- **Unlimited Stock Quota Strategy**:
+  - Offloaded general company financials and real-time ticker quotes to Yahoo Finance, eliminating consumption of the 500 requests/month quota on IndianStockAPI.
+- **Stories Sync & Auto-Refresh**:
+  - Connected `onRefreshStories` callback in Admin Panel to auto-reload stories table after 1-click sync without needing a page refresh.
+
+### Fixed
+- Fixed PostgreSQL `stories_category_check` violation by adding a safe category fallback to `'Market Trends'` while retaining exact topic tags in story keywords.
+
+---
+
 ## [1.3.0] - 2026-11-03
 
 ### Added
