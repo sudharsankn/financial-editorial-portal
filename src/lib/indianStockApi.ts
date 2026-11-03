@@ -169,16 +169,41 @@ export async function mergeNewsIntoStories(newsArticles: any[]): Promise<number>
       ${item.url ? `<p><a href="${item.url}" target="_blank" rel="noopener noreferrer">Read original source dispatch on ${item.source || 'Market Desk'} &rarr;</a></p>` : ''}
     `.trim();
 
+    // Derive category from /news "topics" field (e.g. ['Industry'], ['Markets'], ['Companies'])
+    // If topics has items, use the primary topic; fallback to 'Market Trends'
+    let derivedCategory: string = 'Market Trends';
+    if (Array.isArray(item.topics) && item.topics.length > 0) {
+      const primaryTopic = String(item.topics[0]).trim();
+      if (primaryTopic) {
+        derivedCategory = primaryTopic;
+      }
+    } else if (typeof item.topics === 'string' && item.topics.trim()) {
+      derivedCategory = item.topics.trim();
+    }
+
+    // Build comma-separated keywords including topics
+    const topicKeywords = Array.isArray(item.topics) ? item.topics.join(', ') : (item.topics || '');
+    const keywordsCombined = [
+      'Market News',
+      derivedCategory,
+      topicKeywords,
+      item.source || 'IndianAPI',
+      'Stocks',
+      'Exchange',
+    ]
+      .filter(Boolean)
+      .join(', ');
+
     storiesToInsert.push({
       id: crypto.randomUUID(),
       section: 'Market News',
-      category: 'Market Trends',
+      category: derivedCategory as any,
       heading,
       lead_image_url: leadImg,
       short_description: `<p>${summaryText}</p>`,
       full_story: fullStoryHtml,
       canonical_url: slug,
-      keywords: `Market News, ${item.source || 'IndianAPI'}, Stocks, Exchange`,
+      keywords: keywordsCombined,
       seo_title: rawTitle,
       seo_description: summaryText.slice(0, 160),
       publishing_status: 'Draft', // All /news items saved as Draft per requirements

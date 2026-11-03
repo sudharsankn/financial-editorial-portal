@@ -9,24 +9,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- 2. Create stories table with UTF-8 character encoding support
 CREATE TABLE IF NOT EXISTS public.stories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  section TEXT NOT NULL CHECK (section IN ('Investment Insights', 'Market News', 'Special Coverage')),
-  category TEXT NOT NULL CHECK (category IN (
-    'Financial Planning',
-    'Big Story',
-    'Results Calendar',
-    'Event Calendar',
-    'Class Room',
-    'Political Theatre',
-    'Market Trends',
-    'Mutual Fund',
-    'Stock Recommendations',
-    'Portfolio',
-    'Sector Scan',
-    'Economy Watch',
-    'Personal Finance',
-    'Insurance',
-    'Tax Planning'
-  )),
+  section TEXT NOT NULL CHECK (section IN ('Investment Insights', 'Market News', 'Special Coverage', 'IPO Watch')),
+  category TEXT NOT NULL,
   heading VARCHAR(70) NOT NULL,
   lead_image_url TEXT,
   short_description TEXT,
@@ -65,6 +49,7 @@ CREATE TRIGGER trigger_set_updated_at
   EXECUTE FUNCTION public.handle_updated_at();
 
 -- 5. Row Level Security (RLS) Configuration
+ALTER TABLE public.stories DROP CONSTRAINT IF EXISTS stories_category_check;
 ALTER TABLE public.stories ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read access to Published stories

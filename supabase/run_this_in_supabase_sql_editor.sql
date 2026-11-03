@@ -53,6 +53,9 @@ ALTER TABLE public.stories ADD COLUMN IF NOT EXISTS source_type TEXT DEFAULT 'ma
 ALTER TABLE public.stories ADD COLUMN IF NOT EXISTS source_url TEXT;
 ALTER TABLE public.stories ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
 
+-- Drop check constraint on category so that dynamic topics from /news or new editorial tags are allowed
+ALTER TABLE public.stories DROP CONSTRAINT IF EXISTS stories_category_check;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_stories_canonical_url ON public.stories (canonical_url);
 CREATE INDEX IF NOT EXISTS idx_stories_publishing_status ON public.stories (publishing_status);
 CREATE INDEX IF NOT EXISTS idx_stories_section ON public.stories (section);

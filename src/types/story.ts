@@ -29,16 +29,30 @@ export type Category =
   | 'Tax Planning'
   | 'IPO Pipeline'
   | 'Mainboard IPO'
-  | 'SME IPO';
+  | 'SME IPO'
+  // Categories derived dynamically from /news topics
+  | 'Money'
+  | 'Companies'
+  | 'Markets'
+  | 'Industry'
+  | 'Economy'
+  | 'Logistics'
+  | (string & {});
 
-export const CATEGORIES: Category[] = [
+export const CATEGORIES: string[] = [
+  'Market Trends',
+  'Money',
+  'Companies',
+  'Markets',
+  'Industry',
+  'Economy',
+  'Logistics',
   'Financial Planning',
   'Big Story',
   'Results Calendar',
   'Event Calendar',
   'Class Room',
   'Political Theatre',
-  'Market Trends',
   'Mutual Fund',
   'Stock Recommendations',
   'Portfolio',

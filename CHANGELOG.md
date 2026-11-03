@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-11-03
+
+### Added
+- **Dynamic Category Ingestion from `/news` Topics**:
+  - Ingested stories from `/news` now derive their `category` directly from the `topics` array returned by IndianAPI (e.g. `Industry`, `Companies`, `Markets`, `Economy`, `Money`, `Logistics`).
+  - Added new dynamic category types to `Category` and included them in the master `CATEGORIES` array.
+  - Category filter pills on the Subscriber Feed and Admin category dropdown now seamlessly filter by these topic categories.
+
+### Improved
+- **Database Category Flexibility**:
+  - Removed strict enum check constraint (`stories_category_check`) in `run_this_in_supabase_sql_editor.sql` and `sqlMigration.ts` to support dynamic topic categories without breaking Supabase table constraints.
+- **Article Tagging & Search**:
+  - Integrated topic keywords into `story.keywords` so search queries for topics immediately return relevant stories.
+
+---
+
 ## [1.2.0] - 2026-11-03
 
 ### Added

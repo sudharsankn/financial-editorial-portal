@@ -47,3 +47,4 @@ export function formatTimeAgo(dateString?: string | null): string {
     year: 'numeric',
   }).format(date);
 }
+
