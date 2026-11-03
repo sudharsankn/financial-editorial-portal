@@ -286,3 +286,4 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
     </div>
   );
 };
+

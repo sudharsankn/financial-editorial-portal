@@ -62,3 +62,4 @@ export const HedgeFooter: React.FC = () => {
     </footer>
   );
 };
+

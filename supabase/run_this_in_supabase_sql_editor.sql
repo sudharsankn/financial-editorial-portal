@@ -176,3 +176,28 @@ CREATE POLICY "Public ipos" ON public.ipos FOR ALL USING (true) WITH CHECK (true
 
 DROP POLICY IF EXISTS "Public indian_stock_data" ON public.indian_stock_data;
 CREATE POLICY "Public indian_stock_data" ON public.indian_stock_data FOR ALL USING (true) WITH CHECK (true);
+
+-- 7. Supabase Storage Bucket ('story-images') Setup & Public Policies
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('story-images', 'story-images', true, 5242880, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/jpg'])
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+DROP POLICY IF EXISTS "Public can view story-images" ON storage.objects;
+CREATE POLICY "Public can view story-images"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'story-images');
+
+DROP POLICY IF EXISTS "Public can upload story-images" ON storage.objects;
+CREATE POLICY "Public can upload story-images"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'story-images');
+
+DROP POLICY IF EXISTS "Public can update story-images" ON storage.objects;
+CREATE POLICY "Public can update story-images"
+  ON storage.objects FOR UPDATE
+  USING (bucket_id = 'story-images');
+
+DROP POLICY IF EXISTS "Public can delete story-images" ON storage.objects;
+CREATE POLICY "Public can delete story-images"
+  ON storage.objects FOR DELETE
+  USING (bucket_id = 'story-images');
