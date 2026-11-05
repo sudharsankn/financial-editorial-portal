@@ -50,7 +50,7 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
   const [internalTickers, setInternalTickers] = useState<MarketTickerItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<TickerCategoryFilter>('all');
   const [isPaused, setIsPaused] = useState(false);
-  const [tickerSpeed, setTickerSpeed] = useState<'slow' | 'extra-slow' | 'standard'>('slow');
+  const [tickerSpeed, setTickerSpeed] = useState<'slow' | 'extra-slow' | 'standard'>('extra-slow');
 
   useEffect(() => {
     if (externalTickers && externalTickers.length > 0) {
@@ -247,20 +247,20 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
             {isPaused ? <Play className="w-2.5 h-2.5" /> : <Pause className="w-2.5 h-2.5" />}
           </button>
 
-          {/* Speed Toggle (Extra Slow / Slow / Normal) */}
+          {/* Speed Toggle (Extra Slow 0.5x / Slow 0.75x / Standard 1.0x) */}
           <button
             type="button"
             onClick={() => {
               setTickerSpeed((prev) =>
-                prev === 'slow' ? 'extra-slow' : prev === 'extra-slow' ? 'standard' : 'slow'
+                prev === 'extra-slow' ? 'slow' : prev === 'slow' ? 'standard' : 'extra-slow'
               );
             }}
             title={`Speed: ${
               tickerSpeed === 'extra-slow'
-                ? 'Ultra Slow (180s)'
+                ? 'Ultra Slow (180s - 0.5x)'
                 : tickerSpeed === 'slow'
-                ? 'Slow (120s)'
-                : 'Standard (80s)'
+                ? 'Slow (120s - 0.75x)'
+                : 'Standard (80s - 1.0x)'
             }. Click to cycle.`}
             className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#141A29] hover:bg-[#1E2638] text-[#8C98AC] hover:text-white border border-[#232D42] transition-colors tabular-nums"
           >

@@ -73,7 +73,7 @@
 .animate-ticker {
   display: flex;
   width: max-content;
-  animation: tickerSlide 110s linear infinite;
+  animation: tickerSlide 180s linear infinite;
   will-change: transform;
 }
 
