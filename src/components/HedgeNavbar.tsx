@@ -45,11 +45,12 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-white border-b border-[#E6E6E6] shadow-xs">
+      <header id="section-header-navbar" className="sticky top-0 z-40 bg-white border-b border-[#E6E6E6] shadow-xs">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14 h-[60px] flex items-center justify-between">
           {/* Left: Hamburger Menu */}
           <div className="w-1/3 flex items-center">
             <button
+              id="btn-navbar-menu"
               type="button"
               onClick={onOpenSidebar}
               className="p-2 -ml-2 text-[#262B2E] hover:text-[#903E97] transition-colors focus:outline-none"
@@ -62,6 +63,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
           {/* Center: Hedge Ohari Brand Logo */}
           <div className="w-1/3 flex items-center justify-center">
             <button
+              id="btn-navbar-logo"
               type="button"
               onClick={onNavigateHome}
               className="focus:outline-none cursor-pointer group flex items-center justify-center"
@@ -90,6 +92,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
           <div className="w-1/3 flex items-center justify-end gap-2 sm:gap-4 text-xs font-semibold">
             {/* Subscribe Button */}
             <button
+              id="btn-navbar-subscribe"
               type="button"
               onClick={onOpenSubscribe}
               className="hidden sm:inline-flex items-center justify-center px-4 py-2 rounded text-[11px] font-bold uppercase tracking-wider bg-[#903E97] hover:bg-[#A045A8] text-white transition-all shadow-xs cursor-pointer"
@@ -99,6 +102,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
 
             {/* Bookmark Counter */}
             <button
+              id="btn-navbar-bookmarks"
               type="button"
               onClick={onOpenBookmarks}
               className="flex items-center gap-1 text-[#262B2E] hover:text-[#903E97] p-1.5 transition-colors"
@@ -110,6 +114,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
 
             {/* Search Toggle Icon */}
             <button
+              id="btn-navbar-search"
               type="button"
               onClick={() => setShowSearch(!showSearch)}
               className="p-1.5 text-[#262B2E] hover:text-[#903E97] transition-colors"
@@ -120,6 +125,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
 
             {/* Admin Portal Shortcut */}
             <button
+              id="btn-navbar-admin"
               type="button"
               onClick={onOpenAdmin}
               className="px-2.5 py-1 text-[11px] font-bold text-[#903E97] border border-[#903E97]/40 hover:bg-[#FAF7FC] rounded transition-colors uppercase tracking-wider"
@@ -131,10 +137,11 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
 
         {/* Fly-in Search Bar (Exact Hedge Ohari Pattern) */}
         {showSearch && (
-          <div className="border-t border-[#E6E6E6] bg-[#F2F2F2] py-3 px-4 sm:px-6 transition-all duration-300">
+          <div id="flyout-search-bar" className="border-t border-[#E6E6E6] bg-[#F2F2F2] py-3 px-4 sm:px-6 transition-all duration-300">
             <div className="max-w-3xl mx-auto flex items-center gap-2">
               <form onSubmit={handleSearchSubmit} className="flex-1 flex items-center gap-2">
                 <input
+                  id="input-navbar-search"
                   type="text"
                   value={localSearch}
                   onChange={(e) => setLocalSearch(e.target.value)}
@@ -143,6 +150,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
                   className="w-full bg-white border border-[#E6E6E6] rounded px-4 py-2 text-xs font-medium text-[#262B2E] focus:border-[#903E97] outline-none"
                 />
                 <button
+                  id="btn-navbar-search-submit"
                   type="submit"
                   className="px-5 py-2 rounded bg-[#903E97] hover:bg-[#A045A8] text-white text-xs font-bold uppercase transition-colors"
                 >
@@ -150,6 +158,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
                 </button>
               </form>
               <button
+                id="btn-navbar-search-close"
                 type="button"
                 onClick={() => setShowSearch(false)}
                 className="p-2 text-[#676A6C] hover:text-[#262B2E]"

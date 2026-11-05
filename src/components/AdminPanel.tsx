@@ -571,10 +571,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const headingScript = detectScript(formData.heading);
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14 py-4 sm:py-6">
+    <div id="section-admin-panel" className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14 py-4 sm:py-6">
       {/* Notifications Banner */}
       {message && (
         <div
+          id="admin-notification-banner"
           className={`mb-6 p-4 rounded border text-xs font-semibold flex items-center justify-between ${
             message.type === 'success'
               ? 'bg-[#E8F5EE] border-[#0E8A54]/40 text-[#0E8A54]'
@@ -599,8 +600,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {/* Admin Studio Navigation Tabs: Stories Manager vs Live Markets */}
-      <div className="flex items-center gap-2 border-b border-[#E2E4E8] mb-6">
+      <div id="nav-admin-tabs" className="flex items-center gap-2 border-b border-[#E2E4E8] mb-6">
         <button
+          id="btn-admin-tab-stories"
           type="button"
           onClick={() => {
             setAdminTab('stories');
@@ -620,6 +622,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </button>
 
         <button
+          id="btn-admin-tab-markets"
           type="button"
           onClick={() => {
             setAdminTab('markets');
@@ -639,6 +642,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </button>
 
         <button
+          id="btn-admin-tab-stocks"
           type="button"
           onClick={() => {
             setAdminTab('stocks');
@@ -663,9 +667,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <>
           {/* VIEW: DASHBOARD LIST */}
           {mode === 'list' && (
-            <div className="space-y-6">
+            <div id="section-admin-stories-list" className="space-y-6">
               {/* Header Action Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-[#E2E4E8]">
+              <div id="admin-stories-header" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-[#E2E4E8]">
                 <div>
                   <h2 className="font-['Open_Sans'] font-extrabold text-2xl text-[#1E2229]">
                     Editorial Stories Manager
@@ -676,6 +680,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
 
             <button
+              id="btn-admin-create-story"
               onClick={handleStartCreate}
               className="inline-flex items-center gap-2 px-4 py-2 rounded bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white text-xs font-bold transition-all shadow-xs self-start sm:self-auto"
             >
@@ -685,10 +690,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
 
           {/* Quick Filters */}
-          <div className="bg-white rounded border border-[#E2E4E8] p-4 flex flex-wrap items-center gap-3 text-xs shadow-xs">
+          <div id="admin-stories-filters" className="bg-white rounded border border-[#E2E4E8] p-4 flex flex-wrap items-center gap-3 text-xs shadow-xs">
             <div className="flex-1 min-w-[200px] relative">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#8A92A0]" />
               <input
+                id="input-admin-stories-search"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -700,6 +706,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="flex items-center gap-1.5">
               <span className="text-[#8A92A0] font-semibold">Section:</span>
               <select
+                id="select-admin-filter-section"
                 value={filterSection}
                 onChange={(e) => setFilterSection(e.target.value)}
                 className="bg-[#F4F4F6] border border-[#E2E4E8] rounded px-2.5 py-1 text-xs outline-none"
@@ -716,6 +723,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="flex items-center gap-1.5">
               <span className="text-[#8A92A0] font-semibold">Category:</span>
               <select
+                id="select-admin-filter-category"
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
                 className="bg-[#F4F4F6] border border-[#E2E4E8] rounded px-2.5 py-1 text-xs outline-none"

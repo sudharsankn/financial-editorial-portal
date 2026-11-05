@@ -167,6 +167,7 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
 
   return (
     <div
+      id="section-market-ticker"
       className={`w-full bg-[#0E131F] border-b border-[#1E2638] text-white text-xs select-none shadow-[0_4px_12px_rgba(0,0,0,0.15)] relative z-20 ${
         isPaused ? 'ticker-paused' : ''
       }`}
@@ -175,9 +176,9 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
         {/* ========================================================= */}
         {/* LEFT CONTROL STRIP: Status & View Switcher               */}
         {/* ========================================================= */}
-        <div className="flex items-center gap-2 px-3 py-2 bg-[#0A0E17] border-r border-[#1E2638] shrink-0 z-30 shadow-[4px_0_12px_rgba(0,0,0,0.3)]">
+        <div id="ticker-control-strip" className="flex items-center gap-2 px-3 py-2 bg-[#0A0E17] border-r border-[#1E2638] shrink-0 z-30 shadow-[4px_0_12px_rgba(0,0,0,0.3)]">
           {/* Live Market Indicator */}
-          <div className="flex items-center gap-1.5 pr-2 border-r border-[#1E2638]">
+          <div id="ticker-live-indicator" className="flex items-center gap-1.5 pr-2 border-r border-[#1E2638]">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00E676] opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00E676]"></span>
@@ -188,8 +189,9 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
           </div>
 
           {/* Quick Pill Filter */}
-          <div className="flex items-center gap-1 bg-[#141A29] p-0.5 rounded-md border border-[#232D42]">
+          <div id="ticker-filter-pills" className="flex items-center gap-1 bg-[#141A29] p-0.5 rounded-md border border-[#232D42]">
             <button
+              id="btn-ticker-filter-all"
               type="button"
               onClick={() => setActiveFilter('all')}
               className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
@@ -201,6 +203,7 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
               All
             </button>
             <button
+              id="btn-ticker-filter-indices"
               type="button"
               onClick={() => setActiveFilter('indices')}
               className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
@@ -212,6 +215,7 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
               Indices
             </button>
             <button
+              id="btn-ticker-filter-movers"
               type="button"
               onClick={() => setActiveFilter('movers')}
               className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all flex items-center gap-0.5 ${
@@ -224,6 +228,7 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
               <span>Movers</span>
             </button>
             <button
+              id="btn-ticker-filter-ipos"
               type="button"
               onClick={() => setActiveFilter('ipos')}
               className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all flex items-center gap-0.5 ${
@@ -239,6 +244,7 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
 
           {/* Play / Pause Toggle Button */}
           <button
+            id="btn-ticker-play-pause"
             type="button"
             onClick={() => setIsPaused(!isPaused)}
             title={isPaused ? 'Resume live scrolling' : 'Pause ticker to read'}
@@ -249,6 +255,7 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
 
           {/* Speed Toggle (Extra Slow 0.5x / Slow 0.75x / Standard 1.0x) */}
           <button
+            id="btn-ticker-speed"
             type="button"
             onClick={() => {
               setTickerSpeed((prev) =>
@@ -271,13 +278,14 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
         {/* ========================================================= */}
         {/* CENTER: INFINITE SMOOTH SCROLLING MARQUEE TRACK           */}
         {/* ========================================================= */}
-        <div className="overflow-hidden flex-1 relative py-1.5">
+        <div id="ticker-scroller-container" className="overflow-hidden flex-1 relative py-1.5">
           {marqueeItems.length === 0 ? (
-            <div className="px-4 text-[11px] text-[#8C98AC] italic">
+            <div id="ticker-loading-message" className="px-4 text-[11px] text-[#8C98AC] italic">
               Loading market ticker data...
             </div>
           ) : (
             <div
+              id="ticker-scroller-track"
               className="animate-ticker flex items-center gap-7"
               style={{
                 animationDuration:
@@ -354,12 +362,13 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
         {/* ========================================================= */}
         {/* RIGHT CONTROL: Admin Shortcut / Timestamp                */}
         {/* ========================================================= */}
-        <div className="hidden xl:flex items-center gap-2 px-3 py-2 bg-[#0A0E17] border-l border-[#1E2638] shrink-0 z-30 text-[10px] text-[#8C98AC]">
+        <div id="ticker-right-control" className="hidden xl:flex items-center gap-2 px-3 py-2 bg-[#0A0E17] border-l border-[#1E2638] shrink-0 z-30 text-[10px] text-[#8C98AC]">
           <Clock className="w-3 h-3 text-[#00E676]" />
           <span>Real-Time BSE/NSE</span>
 
           {onOpenAdminMarkets && (
             <button
+              id="btn-ticker-admin-settings"
               type="button"
               onClick={onOpenAdminMarkets}
               title="Admin Market Studio Settings"

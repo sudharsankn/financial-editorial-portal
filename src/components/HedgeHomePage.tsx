@@ -255,10 +255,11 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
           {/* ======================================================== */}
           {/* 1. LEFT SIDEBAR: FIND STORIES & Categories Menu           */}
           {/* ======================================================== */}
-          <aside className="w-full lg:w-56 xl:w-64 2xl:w-72 shrink-0 space-y-4">
+          <aside id="section-left-sidebar" className="w-full lg:w-56 xl:w-64 2xl:w-72 shrink-0 space-y-4">
             {/* FIND STORIES Box (Exact Hedge Ohari Pattern) */}
-            <div className="bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden">
+            <div id="section-find-stories" className="bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden">
               <button
+                id="btn-toggle-find-stories"
                 type="button"
                 onClick={() => setFilterExpanded(!filterExpanded)}
                 className="w-full p-3.5 bg-[#FAF7FC] hover:bg-[#F3E5F5]/60 transition-colors border-b border-[#E6E6E6] text-left flex items-start justify-between gap-2 cursor-pointer"
@@ -283,7 +284,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
               </button>
 
               {filterExpanded && (
-                <div className="p-3.5 space-y-3 bg-white text-xs">
+                <div id="panel-find-stories-body" className="p-3.5 space-y-3 bg-white text-xs">
                   {/* Headline / Keyword Search */}
                   <div>
                     <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
@@ -292,6 +293,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                     <div className="relative">
                       <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#878787]" />
                       <input
+                        id="input-find-stories-search"
                         type="text"
                         value={storySearchQuery}
                         onChange={(e) => setStorySearchQuery(e.target.value)}
@@ -316,6 +318,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                       Section
                     </label>
                     <select
+                      id="select-find-stories-section"
                       value={selectedSection}
                       onChange={(e) => onSelectSection(e.target.value)}
                       className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
@@ -335,6 +338,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                         Category / Tags
                       </label>
                       <select
+                        id="select-find-stories-category"
                         value={selectedCategoryTag}
                         onChange={(e) => setSelectedCategoryTag(e.target.value)}
                         className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
@@ -356,6 +360,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                         Publishing Month
                       </label>
                       <select
+                        id="select-find-stories-month"
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(e.target.value)}
                         className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
@@ -373,6 +378,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   {/* Reset Filters */}
                   {(storySearchQuery || selectedCategoryTag !== 'all' || selectedMonth !== 'all' || selectedSection !== 'All') && (
                     <button
+                      id="btn-find-stories-reset"
                       type="button"
                       onClick={() => {
                         setStorySearchQuery('');
@@ -390,12 +396,13 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
             </div>
 
             {/* Mobile / Tablet Horizontal Category Scroller */}
-            <div className="lg:hidden bg-white rounded border border-[#E6E6E6] p-2 shadow-2xs mb-2">
+            <div id="section-mobile-categories" className="lg:hidden bg-white rounded border border-[#E6E6E6] p-2 shadow-2xs mb-2">
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
                 {navSections.map((sec) => {
                   const isActive = selectedSection === sec.value;
                   return (
                     <button
+                      id={`btn-mobile-category-${sec.value.toLowerCase().replace(/\s+/g, '-')}`}
                       key={sec.value}
                       type="button"
                       onClick={() => {
@@ -421,7 +428,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
             </div>
 
             {/* Desktop Vertical Menu */}
-            <div className="hidden lg:block bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden sticky top-20">
+            <div id="section-desktop-categories" className="hidden lg:block bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden sticky top-20">
               <div className="p-3.5 bg-[#FAF7FC] border-b border-[#E6E6E6] flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[#903E97]">
                   Categories
@@ -434,6 +441,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   return (
                     <li key={sec.value}>
                       <button
+                        id={`btn-desktop-category-${sec.value.toLowerCase().replace(/\s+/g, '-')}`}
                         type="button"
                         onClick={() => {
                           onSelectSection(sec.value);
@@ -461,7 +469,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
               </ul>
 
               {/* Journal Subscription Promo */}
-              <div className="p-4 bg-[#FAF7FC] border-t border-[#E6E6E6] text-center">
+              <div id="section-journal-promo-left" className="p-4 bg-[#FAF7FC] border-t border-[#E6E6E6] text-center">
                 <span className="text-[11px] font-bold text-[#262B2E] block mb-1">
                   Hedge Ohari Print &amp; Digital
                 </span>
@@ -469,6 +477,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   Malayalam Finance Journal for smart investors.
                 </p>
                 <button
+                  id="btn-subscribe-sidebar-left"
                   type="button"
                   onClick={onOpenSubscribe}
                   className="w-full py-1.5 rounded bg-[#903E97] hover:bg-[#A045A8] text-white text-[11px] font-bold uppercase tracking-wider transition-colors"
@@ -482,13 +491,13 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
           {/* ======================================================== */}
           {/* 2. CENTER FEED: Main Editorial Grid + Market Hub          */}
           {/* ======================================================== */}
-          <main className="flex-1 min-w-0 space-y-5">
+          <main id="section-center-feed" className="flex-1 min-w-0 space-y-5">
             {/* ======================================================== */}
             {/* A. EXECUTIVE LIVE MARKET DESK (Movers, IPOs, Indices)     */}
             {/* ======================================================== */}
-            <section className="bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden transition-all duration-200">
+            <section id="section-market-pulse-desk" className="bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden transition-all duration-200">
               {/* Header Bar with Live Badge & View Selector */}
-              <div className="p-3 sm:p-4 bg-[#FAF7FC] border-b border-[#E6E6E6] flex flex-wrap items-center justify-between gap-3">
+              <div id="section-market-pulse-header" className="p-3 sm:p-4 bg-[#FAF7FC] border-b border-[#E6E6E6] flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#0E8A54]/10 text-[#0E8A54] border border-[#0E8A54]/25 text-[10px] font-bold uppercase tracking-wider">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#0E8A54] animate-pulse" />
@@ -499,6 +508,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   </span>
                   {onRefreshLiveMarket && (
                     <button
+                      id="btn-refresh-live-market"
                       type="button"
                       onClick={async () => {
                         setIsRefreshing(true);
@@ -514,8 +524,9 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 </div>
 
                 {/* Desk Switcher Tabs */}
-                <div className="flex items-center gap-1 bg-white p-1 rounded-md border border-[#E6E6E6]">
+                <div id="nav-market-desk-tabs" className="flex items-center gap-1 bg-white p-1 rounded-md border border-[#E6E6E6]">
                   <button
+                    id="tab-top-movers"
                     type="button"
                     onClick={() => {
                       setActiveMarketTab('movers');
@@ -532,6 +543,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   </button>
 
                   <button
+                    id="tab-upcoming-ipos"
                     type="button"
                     onClick={() => {
                       setActiveMarketTab('ipos');
@@ -548,6 +560,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   </button>
 
                   <button
+                    id="tab-live-indices"
                     type="button"
                     onClick={() => {
                       setActiveMarketTab('indices');
@@ -566,6 +579,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
                 {/* Minimize / Expand Toggle */}
                 <button
+                  id="btn-toggle-market-desk"
                   type="button"
                   onClick={() => setDeskExpanded(!deskExpanded)}
                   className="text-xs font-semibold text-[#676A6C] hover:text-[#903E97] flex items-center gap-1 transition-colors"
@@ -578,14 +592,15 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
               {/* Collapsible Content Area */}
               {deskExpanded && (
-                <div className="p-4 sm:p-5">
+                <div id="panel-market-desk-body" className="p-4 sm:p-5">
                   {/* TAB 1: TOP MOVERS & TRENDING STOCKS */}
                   {activeMarketTab === 'movers' && (
-                    <div className="space-y-3.5">
+                    <div id="panel-top-movers" className="space-y-3.5">
                       {/* Filter sub-strip */}
-                      <div className="flex items-center justify-between pb-2.5 border-b border-[#F2F2F2]">
+                      <div id="filters-top-movers" className="flex items-center justify-between pb-2.5 border-b border-[#F2F2F2]">
                         <div className="flex items-center gap-1.5">
                           <button
+                            id="btn-movers-all"
                             type="button"
                             onClick={() => setMoversFilter('all')}
                             className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
@@ -597,6 +612,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                             All Movers ({effectiveTrending.length})
                           </button>
                           <button
+                            id="btn-movers-gainers"
                             type="button"
                             onClick={() => setMoversFilter('gainers')}
                             className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 ${
@@ -609,6 +625,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                             Gainers
                           </button>
                           <button
+                            id="btn-movers-losers"
                             type="button"
                             onClick={() => setMoversFilter('losers')}
                             className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 ${
@@ -627,7 +644,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                       </div>
 
                       {/* Stock Cards Grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-4 gap-3">
+                      <div id="grid-top-movers" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-4 gap-3">
                         {filteredMovers.slice(0, 8).map((stock) => {
                           const isGainer = stock.trend_type === 'gainer';
                           const symbol = stock.ticker_id || stock.company_name;
@@ -638,6 +655,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                           return (
                             <div
                               key={stock.id}
+                              id={`card-mover-${stock.id}`}
                               className="p-3 rounded border border-[#E6E6E6] bg-[#FAF7FC]/50 hover:bg-white hover:border-[#903E97]/40 hover:shadow-2xs transition-all duration-150 flex flex-col justify-between"
                             >
                               <div className="flex items-start justify-between gap-1 mb-1.5">
@@ -690,11 +708,12 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
                   {/* TAB 2: UPCOMING & ACTIVE IPOS */}
                   {activeMarketTab === 'ipos' && (
-                    <div className="space-y-3.5">
+                    <div id="panel-upcoming-ipos" className="space-y-3.5">
                       {/* Filter sub-strip */}
-                      <div className="flex items-center justify-between pb-2.5 border-b border-[#F2F2F2]">
+                      <div id="filters-upcoming-ipos" className="flex items-center justify-between pb-2.5 border-b border-[#F2F2F2]">
                         <div className="flex items-center gap-1.5">
                           <button
+                            id="btn-ipos-all"
                             type="button"
                             onClick={() => setIpoFilter('all')}
                             className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
@@ -706,6 +725,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                             All IPOs ({ipos.length})
                           </button>
                           <button
+                            id="btn-ipos-active"
                             type="button"
                             onClick={() => setIpoFilter('active')}
                             className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 ${
@@ -718,6 +738,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                             Open Now
                           </button>
                           <button
+                            id="btn-ipos-upcoming"
                             type="button"
                             onClick={() => setIpoFilter('upcoming')}
                             className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 ${
@@ -732,6 +753,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                         </div>
 
                         <button
+                          id="btn-ipos-explore-editorial"
                           type="button"
                           onClick={() => onSelectSection('IPO Watch')}
                           className="text-[11px] font-bold text-[#903E97] hover:underline flex items-center gap-0.5"
@@ -742,7 +764,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                       </div>
 
                       {/* IPO Cards Grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5">
+                      <div id="grid-upcoming-ipos" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5">
                         {filteredIpos.slice(0, 6).map((ipo) => {
                           const isOpen = ipo.status === 'active';
                           const isUpcoming = ipo.status === 'upcoming';
@@ -754,6 +776,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                           return (
                             <div
                               key={ipo.id}
+                              id={`card-ipo-${ipo.id}`}
                               className="p-3.5 rounded border border-[#E6E6E6] bg-white hover:border-[#903E97]/40 hover:shadow-2xs transition-all flex flex-col justify-between"
                             >
                               <div className="flex items-start justify-between gap-2 mb-2">
@@ -815,11 +838,12 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
                   {/* TAB 3: BENCHMARK INDICES */}
                   {activeMarketTab === 'indices' && (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2.5">
+                    <div id="panel-benchmark-indices" className="space-y-3">
+                      <div id="grid-benchmark-indices" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2.5">
                         {effectiveIndices.map((indexItem) => (
                           <div
                             key={indexItem.id}
+                            id={`card-index-${indexItem.id}`}
                             className="p-3 rounded border border-[#E6E6E6] bg-[#FAF7FC]/50 hover:bg-white transition-all text-center"
                           >
                             <span className="font-bold text-[11px] text-[#262B2E] block mb-1">
@@ -856,7 +880,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
             {/* ======================================================== */}
             {/* Active FIND STORIES Filter Tag Banner */}
             {(storySearchQuery || selectedCategoryTag !== 'all' || selectedMonth !== 'all') && (
-              <div className="flex items-center justify-between p-2.5 px-3 bg-[#FAF7FC] border border-[#903E97]/25 rounded text-xs text-[#262B2E]">
+              <div id="section-active-filters-banner" className="flex items-center justify-between p-2.5 px-3 bg-[#FAF7FC] border border-[#903E97]/25 rounded text-xs text-[#262B2E]">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-bold text-[#903E97] uppercase text-[10px] tracking-wider flex items-center gap-1">
                     <Search className="w-3 h-3" />
@@ -882,6 +906,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   </span>
                 </div>
                 <button
+                  id="btn-clear-active-filters"
                   type="button"
                   onClick={() => {
                     setStorySearchQuery('');
@@ -896,7 +921,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
             )}
 
             {loading ? (
-              <div className="space-y-4">
+              <div id="section-stories-loading" className="space-y-4">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -909,9 +934,10 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 ))}
               </div>
             ) : stories.length === 0 ? (
-              <div className="bg-white rounded border border-[#E6E6E6] p-12 text-center text-[#676A6C] space-y-3">
+              <div id="section-stories-empty-category" className="bg-white rounded border border-[#E6E6E6] p-12 text-center text-[#676A6C] space-y-3">
                 <p className="text-sm font-semibold">No stories available in this category.</p>
                 <button
+                  id="btn-view-all-stories"
                   type="button"
                   onClick={() => onSelectSection('All')}
                   className="px-4 py-2 rounded bg-[#903E97] text-white text-xs font-bold"
@@ -920,9 +946,10 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 </button>
               </div>
             ) : displayedStories.length === 0 ? (
-              <div className="bg-white rounded border border-[#E6E6E6] p-12 text-center text-[#676A6C] space-y-3">
+              <div id="section-stories-empty-filter" className="bg-white rounded border border-[#E6E6E6] p-12 text-center text-[#676A6C] space-y-3">
                 <p className="text-sm font-semibold">No stories match your active filter criteria.</p>
                 <button
+                  id="btn-clear-empty-filter"
                   type="button"
                   onClick={() => {
                     setStorySearchQuery('');
@@ -935,7 +962,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6">
+              <div id="section-stories-grid" className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6">
                 {displayedStories.map((story, index) => {
                   const isHero = index === 0;
                   const isSaved = bookmarkedIds.has(story.id);
@@ -946,6 +973,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   return (
                     <article
                       key={story.id}
+                      id={`story-card-${story.id}`}
                       onClick={() => onSelectStory(story.canonical_url)}
                       className={`bg-white rounded border border-[#E6E6E6] shadow-2xs hover:shadow-sm transition-all duration-200 overflow-hidden cursor-pointer group flex flex-col justify-between ${
                         isHero ? 'xl:col-span-2' : ''
@@ -987,6 +1015,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                         <div>
                           {/* Heading (.grid-description-content h5) */}
                           <h2
+                            id={`story-heading-${story.id}`}
                             className={`font-['Noto_Sans_Malayalam',_'Open_Sans',_sans-serif] font-bold text-[#262B2E] group-hover:text-[#903E97] transition-colors leading-[1.6] mb-2.5 ${
                               isHero
                                 ? 'text-lg sm:text-[21px] xl:text-[23px]'
@@ -1016,6 +1045,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                           <div className="flex items-center gap-3">
                             {/* Share button */}
                             <button
+                              id={`btn-share-story-${story.id}`}
                               type="button"
                               onClick={(e) => handleShare(story, e)}
                               className="p-1.5 hover:text-[#903E97] transition-colors"
@@ -1030,6 +1060,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
                             {/* Bookmark button */}
                             <button
+                              id={`btn-bookmark-story-${story.id}`}
                               type="button"
                               onClick={(e) => toggleBookmark(story.id, e)}
                               className="p-1.5 hover:text-[#903E97] transition-colors"
@@ -1052,9 +1083,9 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
           {/* ======================================================== */}
           {/* 3. RIGHT SIDEBAR: Subscription & Fast Market Snapshot    */}
           {/* ======================================================== */}
-          <aside className="w-full lg:w-72 xl:w-80 2xl:w-96 shrink-0 space-y-4">
+          <aside id="section-right-sidebar" className="w-full lg:w-72 xl:w-80 2xl:w-96 shrink-0 space-y-4">
             {/* Journal Promo Card */}
-            <div className="bg-white rounded border border-[#E6E6E6] p-5 shadow-2xs text-center space-y-3 sticky top-20">
+            <div id="section-journal-subscription-right" className="bg-white rounded border border-[#E6E6E6] p-5 shadow-2xs text-center space-y-3 sticky top-20">
               <div className="w-12 h-12 mx-auto rounded-full bg-[#FAF7FC] border border-[#903E97]/20 flex items-center justify-center text-[#903E97] font-extrabold text-sm">
                 ഓഹരി
               </div>
@@ -1070,6 +1101,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 Comprehensive knowledge and guidance about Financial Planning and Wealth Creation.
               </p>
               <button
+                id="btn-subscribe-sidebar-right"
                 type="button"
                 onClick={onOpenSubscribe}
                 className="w-full py-2.5 rounded bg-[#903E97] hover:bg-[#A045A8] text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-xs"
@@ -1078,7 +1110,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
               </button>
 
               {/* Fast Market Glance Mini-Widget */}
-              <div className="pt-3 border-t border-[#E6E6E6] text-left space-y-2.5">
+              <div id="section-market-radar-today" className="pt-3 border-t border-[#E6E6E6] text-left space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#903E97] flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#0E8A54] animate-pulse" />
@@ -1091,7 +1123,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
                 {/* Primary Benchmark Index */}
                 {mainIndex && (
-                  <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#FAF7FC] border border-[#E6E6E6]">
+                  <div id="radar-main-index" className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#FAF7FC] border border-[#E6E6E6]">
                     <div>
                       <span className="font-extrabold text-[#262B2E] text-[11px] block">
                         {mainIndex.symbol}
@@ -1117,7 +1149,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
                 {/* Top Gainer */}
                 {topGainer && (
-                  <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#E8F5EE]/70 border border-[#0E8A54]/15">
+                  <div id="radar-top-gainer" className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#E8F5EE]/70 border border-[#0E8A54]/15">
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-[#262B2E] text-[11px]">
@@ -1139,7 +1171,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
                 {/* Top Loser */}
                 {topLoser && (
-                  <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#FDECEC]/70 border border-[#D32F2F]/15">
+                  <div id="radar-top-loser" className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#FDECEC]/70 border border-[#D32F2F]/15">
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-[#262B2E] text-[11px]">
@@ -1161,7 +1193,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
                 {/* Featured IPO */}
                 {featuredIpo && (
-                  <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#FAF7FC] border border-[#903E97]/20">
+                  <div id="radar-featured-ipo" className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#FAF7FC] border border-[#903E97]/20">
                     <div className="min-w-0 pr-1">
                       <span className="font-bold text-[#262B2E] text-[11px] block truncate">
                         {featuredIpo.name}
@@ -1189,7 +1221,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
             </div>
 
             {/* Visit Hedge at Card (Exact Hedge Ohari Pattern) */}
-            <div className="bg-white rounded border border-[#E6E6E6] p-4 shadow-2xs space-y-3">
+            <div id="section-visit-hedge-at" className="bg-white rounded border border-[#E6E6E6] p-4 shadow-2xs space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-[#F2F2F2]">
                 <h4 className="font-['Open_Sans'] font-extrabold text-xs text-[#262B2E] uppercase tracking-wider flex items-center gap-1.5">
                   <Globe className="w-3.5 h-3.5 text-[#903E97]" />
@@ -1198,9 +1230,10 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 <span className="text-[10px] text-[#878787] font-semibold">Official Channels</span>
               </div>
 
-              <ul className="space-y-1.5 text-xs">
+              <ul id="list-visit-hedge-channels" className="space-y-1.5 text-xs">
                 <li>
                   <a
+                    id="link-hedge-website"
                     href="https://hedgeequities.com"
                     target="_blank"
                     rel="noreferrer"
@@ -1215,6 +1248,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 </li>
                 <li>
                   <a
+                    id="link-hedge-youtube"
                     href="https://www.youtube.com/@hedgeequitiesltd"
                     target="_blank"
                     rel="noreferrer"
@@ -1229,6 +1263,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 </li>
                 <li>
                   <a
+                    id="link-hedge-facebook"
                     href="https://www.facebook.com/hedgeequities/"
                     target="_blank"
                     rel="noreferrer"
@@ -1243,6 +1278,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 </li>
                 <li>
                   <a
+                    id="link-hedge-twitter"
                     href="https://twitter.com/hedge_equities"
                     target="_blank"
                     rel="noreferrer"
@@ -1257,6 +1293,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 </li>
                 <li>
                   <a
+                    id="link-hedge-instagram"
                     href="https://www.instagram.com/hedgeequities/"
                     target="_blank"
                     rel="noreferrer"
@@ -1271,6 +1308,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 </li>
                 <li>
                   <a
+                    id="link-hedge-linkedin"
                     href="https://www.linkedin.com/company/hedge-equities/"
                     target="_blank"
                     rel="noreferrer"
