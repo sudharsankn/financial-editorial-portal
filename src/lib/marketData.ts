@@ -5,14 +5,15 @@
  * Fully replaces stock.indianapi.in.
  */
 
-import { Story, TrendingStockItem, IpoItemRecord, NewsItemRecord } from '../types/story';
-import { getSupabaseClient } from './supabase';
+import { Story, TrendingStockItem, IpoItemRecord, NewsItemRecord, MarketTickerItem } from '../types/story';
+import { getSupabaseClient, fetchMarketTickers } from './supabase';
 import { countGraphemes, generateCanonicalSlug } from './grapheme';
 
 export interface UnifiedMarketSyncResults {
   success: boolean;
   timestamp: string;
   source: 'yahoo-finance-free';
+  indices?: MarketTickerItem[];
   trending: {
     count: number;
     topGainers: TrendingStockItem[];
@@ -38,6 +39,7 @@ const LOCAL_TRENDING_KEY = 'financial_portal_trending_stocks_v1';
 const LOCAL_IPOS_KEY = 'financial_portal_ipos_v1';
 const LOCAL_STOCK_LOOKUP_KEY = 'financial_portal_stock_lookup_v1';
 const LOCAL_NEWS_KEY = 'financial_portal_news_v1';
+const LOCAL_INDICES_KEY = 'financial_portal_tickers_v1';
 
 // Popular Indian Large-Caps tracked for Gainers & Losers
 const TRACKED_NIFTY_SYMBOLS = [
@@ -133,7 +135,33 @@ export async function executeUnifiedMarketSync(
 
     await saveTrendingStocksToDedicatedTable([...topGainers, ...topLosers]);
 
-    // 3. Process IPOs -> Fetch fresh IPOs from sync payload or extract dynamically
+    // 3. Process Live Indices -> Save into local cache & supabase
+    const rawIndices = apiData?.indices || [];
+    const liveIndices: MarketTickerItem[] = rawIndices.map((idx: any, i: number) => ({
+      id: idx.id || `idx-${i + 1}`,
+      symbol: idx.symbol,
+      price: idx.price,
+      change: idx.change,
+      is_positive: idx.is_positive,
+      display_order: idx.display_order || i + 1,
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    }));
+
+    if (liveIndices.length > 0) {
+      try {
+        localStorage.setItem(LOCAL_INDICES_KEY, JSON.stringify(liveIndices));
+      } catch {}
+      const client = getSupabaseClient();
+      if (client) {
+        try {
+          await client.from('market_tickers').upsert(liveIndices);
+        } catch {}
+      }
+    }
+
+    // 4. Process IPOs -> Fetch fresh IPOs from sync payload or extract dynamically
     let iposList: IpoItemRecord[] = [];
     if (apiData?.ipo?.items && Array.isArray(apiData.ipo.items) && apiData.ipo.items.length > 0) {
       iposList = apiData.ipo.items.map((item: any, i: number) => ({
@@ -174,6 +202,7 @@ export async function executeUnifiedMarketSync(
       success: true,
       timestamp: now,
       source: 'yahoo-finance-free',
+      indices: liveIndices,
       trending: {
         count: topGainers.length + topLosers.length,
         topGainers,
@@ -204,6 +233,130 @@ export async function executeUnifiedMarketSync(
       error: err?.message || 'Failed executing unified sync',
     };
   }
+}
+
+/**
+ * Direct Live Real-Time Market Snapshot for Reader / Subscriber Portal
+ * Fetches real-time Indices, Top Movers, and IPO table dynamically.
+ */
+export async function fetchLiveMarketSnapshot(): Promise<{
+  indices: MarketTickerItem[];
+  trending: TrendingStockItem[];
+  ipos: IpoItemRecord[];
+}> {
+  const now = new Date().toISOString();
+  try {
+    const res = await fetch('/api/market-data?endpoint=unified');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success) {
+        // 1. Live Real-Time Indices
+        const liveIndices: MarketTickerItem[] = (data.indices || []).map((idx: any, i: number) => ({
+          id: idx.id || `idx-${i + 1}`,
+          symbol: idx.symbol,
+          price: idx.price,
+          change: idx.change,
+          is_positive: idx.is_positive,
+          display_order: idx.display_order || i + 1,
+          is_active: true,
+          created_at: now,
+          updated_at: now,
+        }));
+
+        // 2. Live Real-Time Top Movers
+        const topGainers: TrendingStockItem[] = (data.trending?.topGainers || []).map((g: any, i: number) => ({
+          id: `trend-live-g-${i + 1}`,
+          ticker_id: g.ticker_id || g.symbol,
+          company_name: g.company_name,
+          price: String(g.price),
+          percent_change: String(g.percent_change),
+          net_change: String(g.net_change || ''),
+          trend_type: 'gainer' as const,
+          volume: g.volume,
+          section: 'Market News',
+          category: 'Top Movers',
+          is_published: true,
+          display_order: i + 1,
+          fetched_at: now,
+        }));
+
+        const topLosers: TrendingStockItem[] = (data.trending?.topLosers || []).map((l: any, i: number) => ({
+          id: `trend-live-l-${i + 1}`,
+          ticker_id: l.ticker_id || l.symbol,
+          company_name: l.company_name,
+          price: String(l.price),
+          percent_change: String(l.percent_change),
+          net_change: String(l.net_change || ''),
+          trend_type: 'loser' as const,
+          volume: l.volume,
+          section: 'Market News',
+          category: 'Top Movers',
+          is_published: true,
+          display_order: i + 1,
+          fetched_at: now,
+        }));
+
+        const liveTrending = [...topGainers, ...topLosers];
+
+        // 3. Live Real-Time IPOs
+        const liveIpos: IpoItemRecord[] = (data.ipo?.items || []).map((item: any, i: number) => ({
+          id: item.id || `ipo-live-${i + 1}`,
+          symbol: item.symbol || 'IPO',
+          name: item.name,
+          status: item.status || 'active',
+          is_sme: Boolean(item.is_sme),
+          additional_text: item.additional_text,
+          min_price: item.min_price,
+          max_price: item.max_price,
+          issue_price: item.issue_price,
+          lot_size: item.lot_size,
+          bidding_start_date: item.bidding_start_date,
+          bidding_end_date: item.bidding_end_date,
+          listing_date: item.listing_date,
+          section: 'IPO Watch',
+          category: item.is_sme ? 'SME IPO' : 'Mainboard IPO',
+          display_order: i + 1,
+          is_published: true,
+          fetched_at: now,
+          created_at: now,
+        }));
+
+        // Persist into fast local storage cache
+        if (liveIndices.length > 0) {
+          try {
+            localStorage.setItem(LOCAL_INDICES_KEY, JSON.stringify(liveIndices));
+          } catch {}
+        }
+        if (liveTrending.length > 0) {
+          try {
+            localStorage.setItem(LOCAL_TRENDING_KEY, JSON.stringify(liveTrending));
+          } catch {}
+        }
+        if (liveIpos.length > 0) {
+          try {
+            localStorage.setItem(LOCAL_IPOS_KEY, JSON.stringify(liveIpos));
+          } catch {}
+        }
+
+        return {
+          indices: liveIndices,
+          trending: liveTrending,
+          ipos: liveIpos,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Live market snapshot error:', err);
+  }
+
+  // Fallback to cache / defaults
+  const [indices, trending, ipos] = await Promise.all([
+    fetchMarketTickers(true),
+    fetchTrendingStocks(true),
+    fetchIpos(true),
+  ]);
+
+  return { indices, trending, ipos };
 }
 
 /**

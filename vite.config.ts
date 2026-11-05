@@ -16,6 +16,106 @@ const TRACKED_NIFTY_SYMBOLS = [
   'ASIANPAINT.NS', 'BAJAJFINSV.NS', 'WIPRO.NS', 'ULTRACEMCO.NS', 'NESTLEIND.NS'
 ];
 
+// Major Indian & Global Benchmark Indices
+const INDEX_CONFIG = [
+  { key: 'NIFTY 50', symbol: '^NSEI' },
+  { key: 'SENSEX', symbol: '^BSESN' },
+  { key: 'BANK NIFTY', symbol: '^NSEBANK' },
+  { key: 'NIFTY IT', symbol: '^CNXIT' },
+  { key: 'GOLD (10g)', symbol: 'GC=F' },
+  { key: 'BRENT CRUDE', symbol: 'BZ=F' },
+  { key: 'USD / INR', symbol: 'INR=X' },
+  { key: 'NASDAQ', symbol: '^IXIC' },
+];
+
+function fetchLiveHtml(targetUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const req = https.get(
+        targetUrl,
+        {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          },
+          timeout: 5000,
+        },
+        (res) => {
+          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            return resolve(fetchLiveHtml(res.headers.location));
+          }
+          let data = '';
+          res.on('data', (c) => (data += c));
+          res.on('end', () => resolve(data));
+        }
+      );
+      req.on('error', () => resolve(''));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve('');
+      });
+    } catch {
+      resolve('');
+    }
+  });
+}
+
+async function scrapeLiveIpoTable(): Promise<any[]> {
+  try {
+    const html = await fetchLiveHtml('https://ipowatch.in/');
+    if (!html) return [];
+    const rows = html.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
+    const ipos: any[] = [];
+    const seen = new Set<string>();
+
+    for (const r of rows) {
+      const cells = (r.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi) || []).map((c) =>
+        c.replace(/<[^>]+>/g, '').trim()
+      );
+      if (cells.length >= 4 && !cells[0].toLowerCase().includes('company')) {
+        const nameRaw = cells[0].replace(/Closed|Open|Upcoming/gi, '').trim();
+        const statusRaw: 'active' | 'upcoming' | 'closed' = cells[0].toLowerCase().includes('open')
+          ? 'active'
+          : cells[0].toLowerCase().includes('upcoming')
+          ? 'upcoming'
+          : 'closed';
+        if (nameRaw.length < 3 || seen.has(nameRaw.toUpperCase())) continue;
+        seen.add(nameRaw.toUpperCase());
+
+        const priceMatch = (cells[3] || '').match(/[\d,.]+/);
+        const priceVal = priceMatch ? parseFloat(priceMatch[0].replace(/,/g, '')) : 0;
+        const gmp = cells[1] || '';
+        const estGain = cells[4] || '';
+        const dates = cells[5] || '';
+        const isSme = nameRaw.toLowerCase().includes('sme') || priceVal < 120;
+
+        ipos.push({
+          id: `ipo-live-${ipos.length + 1}`,
+          symbol: nameRaw.split(' ')[0].toUpperCase().replace(/[^A-Z0-9]/g, ''),
+          name: nameRaw,
+          status: statusRaw,
+          issue_price: priceVal,
+          min_price: priceVal,
+          max_price: priceVal,
+          lot_size: isSme ? 150 : 50,
+          additional_text: `GMP: ${gmp} | Est: ${estGain}`,
+          bidding_end_date: dates,
+          is_sme: isSme,
+          section: 'IPO Watch',
+          category: isSme ? 'SME IPO' : 'Mainboard IPO',
+          display_order: ipos.length + 1,
+          is_published: true,
+          fetched_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        });
+      }
+    }
+    return ipos;
+  } catch {
+    return [];
+  }
+}
+
 function normalizeIndianSymbol(sym: string): string {
   const upper = sym.trim().toUpperCase();
   if (upper.startsWith('^') || upper.includes('.')) {
@@ -213,8 +313,21 @@ function marketDataDevPlugin(): Plugin {
           if (endpoint === 'unified') {
             const cleanSym = normalizeIndianSymbol(symbol);
 
-            const [quotesBatch, etNewsFeed, mintNewsFeed, bsNewsFeed, ndtvNewsFeed, googleNewsFeed, companySummary, ipoFeed] = await Promise.all([
+            const [
+              indexQuotesBatch,
+              quotesBatch,
+              liveIposScraped,
+              etNewsFeed,
+              mintNewsFeed,
+              bsNewsFeed,
+              ndtvNewsFeed,
+              googleNewsFeed,
+              companySummary,
+              ipoFeed,
+            ] = await Promise.all([
+              Promise.all(INDEX_CONFIG.map((c) => yf.quote(c.symbol).catch(() => null))),
               Promise.all(TRACKED_NIFTY_SYMBOLS.map((s) => yf.quote(s).catch(() => null))),
+              scrapeLiveIpoTable(),
               rssParser
                 .parseURL('https://economictimes.indiatimes.com/markets/stocks/news/rssfeeds/2146842.cms')
                 .catch(() => ({ items: [] })),
@@ -243,6 +356,32 @@ function marketDataDevPlugin(): Plugin {
                 )
                 .catch(() => ({ items: [] })),
             ]);
+
+            // Process Real-Time Live Benchmark Indices
+            const liveIndices = indexQuotesBatch
+              .map((q, idx) => {
+                if (!q) return null;
+                const isUp = (q.regularMarketChange || 0) >= 0;
+                const changePercent =
+                  q.regularMarketChangePercent !== undefined && q.regularMarketChangePercent !== null
+                    ? `${isUp ? '+' : ''}${q.regularMarketChangePercent.toFixed(2)}%`
+                    : '+0.00%';
+                const priceFormatted =
+                  q.regularMarketPrice !== undefined && q.regularMarketPrice !== null
+                    ? q.regularMarketPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+                    : '—';
+
+                return {
+                  id: `idx-${idx + 1}`,
+                  symbol: INDEX_CONFIG[idx].key,
+                  price: priceFormatted,
+                  change: changePercent,
+                  is_positive: isUp,
+                  display_order: idx + 1,
+                  is_active: true,
+                };
+              })
+              .filter(Boolean);
 
             const validQuotes = quotesBatch.filter(Boolean) as any[];
             validQuotes.sort(
@@ -355,25 +494,12 @@ function marketDataDevPlugin(): Plugin {
               exchange: price?.exchangeName || 'NSE',
             };
 
-            // Process Dynamic Real-Time IPOs
-            const ipoSeen = new Set();
+            // Process Real-Time Live IPOs from primary live scraper + dynamic news
+            const finalIpos: any[] = [...(liveIposScraped || [])];
+            const ipoSeen = new Set(finalIpos.map((i: any) => String(i.name || '').toUpperCase()));
             const ipoBanned = new Set(['FLAT', 'INDIA', 'SENSEX', 'NIFTY', 'STOCK', 'MARKET', 'HOW', 'WHAT', 'WHY', 'GREY', 'PRIMARY']);
             const todayStr = new Date().toISOString().split('T')[0];
-            const priceBands: Record<string, { issue_price: number; min_price: number; max_price: number; lot_size: number }> = {
-              SFC: { issue_price: 245, min_price: 230, max_price: 245, lot_size: 60 },
-              HGS: { issue_price: 485, min_price: 460, max_price: 485, lot_size: 30 },
-              BOMBAY: { issue_price: 172, min_price: 164, max_price: 172, lot_size: 80 },
-              BLS: { issue_price: 135, min_price: 128, max_price: 135, lot_size: 110 },
-              MAXWELL: { issue_price: 92, min_price: 88, max_price: 92, lot_size: 150 },
-              ANTALA: { issue_price: 68, min_price: 64, max_price: 68, lot_size: 200 },
-              VEDANT: { issue_price: 110, min_price: 105, max_price: 110, lot_size: 120 },
-              CARVER: { issue_price: 185, min_price: 175, max_price: 185, lot_size: 75 },
-              AJWA: { issue_price: 75, min_price: 70, max_price: 75, lot_size: 160 },
-              JIO: { issue_price: 320, min_price: 300, max_price: 320, lot_size: 45 },
-              WISCON: { issue_price: 105, min_price: 98, max_price: 105, lot_size: 125 },
-            };
 
-            const ipoItems: any[] = [];
             for (const it of (ipoFeed.items || [])) {
               const title = it.title || '';
               const match = title.match(/^([A-Za-z0-9\s&.\(\)]+?)\s+(?:SME\s+|Mainboard\s+)?IPO/i);
@@ -398,25 +524,26 @@ function marketDataDevPlugin(): Plugin {
                 status = 'active';
               }
 
-              const band = priceBands[sym] || { issue_price: 150, min_price: 142, max_price: 150, lot_size: 100 };
-
-              ipoItems.push({
+              finalIpos.push({
+                id: `ipo-news-${finalIpos.length + 1}`,
                 symbol: sym,
                 name: company + (company.toLowerCase().includes('ltd') || company.toLowerCase().includes('limited') ? '' : ' Limited'),
                 status,
-                is_sme: lower.includes('sme') || band.lot_size > 100,
-                issue_price: band.issue_price,
-                min_price: band.min_price,
-                max_price: band.max_price,
-                lot_size: band.lot_size,
+                is_sme: lower.includes('sme'),
+                issue_price: 100,
+                min_price: 95,
+                max_price: 100,
+                lot_size: lower.includes('sme') ? 150 : 50,
                 bidding_start_date: todayStr,
                 bidding_end_date: todayStr,
                 listing_date: status === 'listed' ? todayStr : undefined,
                 section: 'IPO Watch',
-                category: lower.includes('sme') || band.lot_size > 100 ? 'SME IPO' : 'Mainboard IPO',
-                display_order: ipoItems.length + 1,
+                category: lower.includes('sme') ? 'SME IPO' : 'Mainboard IPO',
+                display_order: finalIpos.length + 1,
                 is_published: true,
                 document_url: it.link,
+                fetched_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
               });
             }
 
@@ -426,6 +553,7 @@ function marketDataDevPlugin(): Plugin {
                 success: true,
                 source: 'yahoo-finance-free',
                 timestamp: new Date().toISOString(),
+                indices: liveIndices,
                 trending: {
                   count: topGainers.length + topLosers.length,
                   topGainers,
@@ -436,8 +564,8 @@ function marketDataDevPlugin(): Plugin {
                   items: newsItems,
                 },
                 ipo: {
-                  count: ipoItems.length,
-                  items: ipoItems,
+                  count: finalIpos.length,
+                  items: finalIpos,
                 },
                 stock: {
                   symbol: cleanSym.replace('.NS', ''),

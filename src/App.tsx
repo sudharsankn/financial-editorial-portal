@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Story, StoryFormData, MarketTickerItem } from './types/story';
-import { fetchSavedStockData, fetchTrendingStocks, fetchIpos } from './lib/marketData';
+import { fetchSavedStockData, fetchTrendingStocks, fetchIpos, fetchLiveMarketSnapshot } from './lib/marketData';
 import { TrendingStockItem, IpoItemRecord } from './types/story';
 import {
   fetchPublishedStories,
@@ -93,12 +93,30 @@ export default function App() {
     }
   }, []);
 
-  // Load market tickers
+  // Load market tickers from Supabase or cached storage
   const loadMarketTickers = useCallback(async () => {
     try {
       const data = await fetchMarketTickers();
       setMarketTickers(data);
     } catch {}
+  }, []);
+
+  // Fetch real-time live market snapshot (Indices, Movers, and IPOs) directly from live exchange feeds
+  const refreshLiveMarketData = useCallback(async () => {
+    try {
+      const snapshot = await fetchLiveMarketSnapshot();
+      if (snapshot.indices && snapshot.indices.length > 0) {
+        setMarketTickers(snapshot.indices);
+      }
+      if (snapshot.trending && snapshot.trending.length > 0) {
+        setPublishedTrendingStocks(snapshot.trending);
+      }
+      if (snapshot.ipos && snapshot.ipos.length > 0) {
+        setPublishedIpos(snapshot.ipos);
+      }
+    } catch (err) {
+      console.warn('Live market refresh error:', err);
+    }
   }, []);
 
   // Load published stock data, trending stocks & IPOs
@@ -114,8 +132,8 @@ export default function App() {
         fetchIpos(true),
       ]);
       setPublishedStockData(generalData);
-      setPublishedTrendingStocks(trendingData);
-      setPublishedIpos(ipoData);
+      if (trendingData.length > 0) setPublishedTrendingStocks(trendingData);
+      if (ipoData.length > 0) setPublishedIpos(ipoData);
     } catch {}
   }, [selectedSection, selectedCategory]);
 
@@ -124,10 +142,21 @@ export default function App() {
     if (currentView === 'feed') {
       loadSubscriberStories();
       loadPublishedStockData();
+      refreshLiveMarketData();
     } else if (currentView === 'admin') {
       loadAdminStories();
     }
-  }, [currentView, loadSubscriberStories, loadAdminStories, loadPublishedStockData]);
+  }, [currentView, loadSubscriberStories, loadAdminStories, loadPublishedStockData, refreshLiveMarketData]);
+
+  // Periodic Live Market Polling (every 60 seconds while viewing the portal)
+  useEffect(() => {
+    if (currentView === 'feed') {
+      const timer = setInterval(() => {
+        refreshLiveMarketData();
+      }, 60000);
+      return () => clearInterval(timer);
+    }
+  }, [currentView, refreshLiveMarketData]);
 
   useEffect(() => {
     loadMarketTickers();
@@ -288,6 +317,7 @@ export default function App() {
             marketTickers={marketTickers}
             trendingStocks={publishedTrendingStocks}
             ipos={publishedIpos}
+            onRefreshLiveMarket={refreshLiveMarketData}
             onSearchSymbol={(sym) => {
               setSearchQuery(sym);
               if (currentView !== 'feed') setCurrentView('feed');

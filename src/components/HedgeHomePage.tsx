@@ -25,6 +25,7 @@ import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
+  RotateCcw,
 } from 'lucide-react';
 import { formatTimeAgo } from '../lib/timeAgo';
 import { DEFAULT_MARKET_TICKERS } from '../lib/supabase';
@@ -41,6 +42,7 @@ interface HedgeHomePageProps {
   trendingStocks?: TrendingStockItem[];
   ipos?: IpoItemRecord[];
   onSearchSymbol?: (symbol: string) => void;
+  onRefreshLiveMarket?: () => void;
 }
 
 type MarketDeskTab = 'indices' | 'movers' | 'ipos';
@@ -58,7 +60,9 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
   trendingStocks = [],
   ipos = [],
   onSearchSymbol,
+  onRefreshLiveMarket,
 }) => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(() => {
     try {
@@ -240,6 +244,20 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   <span className="text-xs font-bold text-[#262B2E] hidden sm:inline">
                     Live NSE &bull; BSE Terminal
                   </span>
+                  {onRefreshLiveMarket && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsRefreshing(true);
+                        await onRefreshLiveMarket();
+                        setTimeout(() => setIsRefreshing(false), 800);
+                      }}
+                      title="Fetch latest live market exchange quotes"
+                      className="p-1 rounded hover:bg-white text-[#676A6C] hover:text-[#903E97] transition-colors"
+                    >
+                      <RotateCcw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-[#903E97]' : ''}`} />
+                    </button>
+                  )}
                 </div>
 
                 {/* Desk Switcher Tabs */}
