@@ -1,9 +1,76 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import YahooFinance from 'yahoo-finance2';
 import Parser from 'rss-parser';
+import https from 'https';
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 const rssParser = new Parser();
+
+function scrapeArticleText(targetUrl: string): Promise<string[]> {
+  return new Promise((resolve) => {
+    try {
+      const req = https.get(
+        targetUrl,
+        {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+          timeout: 5000,
+        },
+        (res) => {
+          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            return resolve(scrapeArticleText(res.headers.location));
+          }
+          let data = '';
+          res.on('data', (chunk) => (data += chunk));
+          res.on('end', () => {
+            const clean = data
+              .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+              .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+            const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+            let match;
+            const paragraphs: string[] = [];
+            const bannedSnippets = [
+              'subscribe',
+              'copyright',
+              'privacy policy',
+              'terms of service',
+              'cookie',
+              'all rights reserved',
+              'advertisement',
+              'newsletter',
+              'download the app',
+              'sign in',
+              'log in',
+              'opt-out',
+            ];
+
+            while ((match = pRegex.exec(clean)) !== null) {
+              const text = match[1]
+                .replace(/<[^>]+>/g, '')
+                .replace(/&nbsp;/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+              if (text.length > 50 && !bannedSnippets.some((b) => text.toLowerCase().includes(b))) {
+                paragraphs.push(text);
+              }
+            }
+            resolve(paragraphs);
+          });
+        }
+      );
+      req.on('error', () => resolve([]));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve([]);
+      });
+    } catch {
+      resolve([]);
+    }
+  });
+}
 
 // Core Indian Nifty large-caps tracked for gainers / losers
 const TRACKED_NIFTY_SYMBOLS = [
@@ -265,7 +332,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ==============================================================
-    // 2. SINGLE QUOTE
+    // 2. SCRAPE FULL ARTICLE FROM NEWS WIRE URL
+    // ==============================================================
+    if (endpoint === 'scrape') {
+      const targetUrl = String(req.query.url || '');
+      if (!targetUrl) {
+        return res.status(400).json({ success: false, error: 'url parameter required' });
+      }
+      const paragraphs = await scrapeArticleText(targetUrl);
+      return res.status(200).json({
+        success: true,
+        url: targetUrl,
+        paragraphsCount: paragraphs.length,
+        paragraphs,
+        full_html: paragraphs.map((p) => `<p>${p}</p>`).join(''),
+      });
+    }
+
+    // ==============================================================
+    // 3. SINGLE QUOTE
     // ==============================================================
     if (endpoint === 'quote') {
       const clean = normalizeIndianSymbol(String(symbol));

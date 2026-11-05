@@ -1,6 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import https from 'https';
 import { defineConfig, Plugin } from 'vite';
 import YahooFinance from 'yahoo-finance2';
 import Parser from 'rss-parser';
@@ -21,6 +22,72 @@ function normalizeIndianSymbol(sym: string): string {
     return upper;
   }
   return `${upper}.NS`;
+}
+
+function scrapeArticleText(targetUrl: string): Promise<string[]> {
+  return new Promise((resolve) => {
+    try {
+      const req = https.get(
+        targetUrl,
+        {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+          timeout: 5000,
+        },
+        (res) => {
+          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            return resolve(scrapeArticleText(res.headers.location));
+          }
+          let data = '';
+          res.on('data', (chunk) => (data += chunk));
+          res.on('end', () => {
+            const clean = data
+              .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+              .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+            const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+            let match;
+            const paragraphs: string[] = [];
+            const bannedSnippets = [
+              'subscribe',
+              'copyright',
+              'privacy policy',
+              'terms of service',
+              'cookie',
+              'all rights reserved',
+              'advertisement',
+              'newsletter',
+              'download the app',
+              'sign in',
+              'log in',
+              'opt-out',
+            ];
+
+            while ((match = pRegex.exec(clean)) !== null) {
+              const text = match[1]
+                .replace(/<[^>]+>/g, '')
+                .replace(/&nbsp;/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+              if (text.length > 50 && !bannedSnippets.some((b) => text.toLowerCase().includes(b))) {
+                paragraphs.push(text);
+              }
+            }
+            resolve(paragraphs);
+          });
+        }
+      );
+      req.on('error', () => resolve([]));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve([]);
+      });
+    } catch {
+      resolve([]);
+    }
+  });
 }
 
 function marketDataDevPlugin(): Plugin {
@@ -266,6 +333,27 @@ function marketDataDevPlugin(): Plugin {
                   symbol: cleanSym.replace('.NS', ''),
                   data: companyData,
                 },
+              })
+            );
+            return;
+          }
+
+          if (endpoint === 'scrape') {
+            const targetUrl = urlObj.searchParams.get('url') || '';
+            if (!targetUrl) {
+              res.statusCode = 400;
+              res.end(JSON.stringify({ success: false, error: 'url parameter required' }));
+              return;
+            }
+            const paragraphs = await scrapeArticleText(targetUrl);
+            res.statusCode = 200;
+            res.end(
+              JSON.stringify({
+                success: true,
+                url: targetUrl,
+                paragraphsCount: paragraphs.length,
+                paragraphs,
+                full_html: paragraphs.map((p) => `<p>${p}</p>`).join(''),
               })
             );
             return;

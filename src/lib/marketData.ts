@@ -207,6 +207,34 @@ export async function executeUnifiedMarketSync(
 }
 
 /**
+ * Scrape full article body paragraphs from original wire URL
+ */
+export async function scrapeFullStoryFromUrl(url: string): Promise<{ success: boolean; paragraphs: string[]; full_html: string }> {
+  if (!url || !url.startsWith('http')) {
+    return { success: false, paragraphs: [], full_html: '' };
+  }
+
+  try {
+    const res = await fetch(`/api/market-data?endpoint=scrape&url=${encodeURIComponent(url)}`);
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.paragraphs) && data.paragraphs.length > 0) {
+        return {
+          success: true,
+          paragraphs: data.paragraphs,
+          full_html: data.full_html || data.paragraphs.map((p: string) => `<p>${p}</p>`).join(''),
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Scraping full story error:', err);
+  }
+
+  return { success: false, paragraphs: [], full_html: '' };
+}
+
+/**
  * Save selected News item into public.news table and local cache
  */
 export async function saveNewsItemToDatabase(item: NewsItemRecord): Promise<{ success: boolean; error?: string }> {

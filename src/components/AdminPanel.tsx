@@ -16,7 +16,7 @@ import {
 import { RichTextEditor } from './RichTextEditor';
 import { formatTimeAgo } from '../lib/timeAgo';
 import { StockDataPanel } from './StockDataPanel';
-import { fetchSavedNews } from '../lib/marketData';
+import { fetchSavedNews, scrapeFullStoryFromUrl } from '../lib/marketData';
 import {
   countGraphemes,
   generateCanonicalSlug,
@@ -134,6 +134,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [selectedNewsId, setSelectedNewsId] = useState<string>('');
   const [selectedNewsItem, setSelectedNewsItem] = useState<NewsItemRecord | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [scrapingNews, setScrapingNews] = useState(false);
 
   useEffect(() => {
     fetchSavedNews().then((list) => {
@@ -403,7 +404,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleApplyNewsToStory = () => {
+  const handleApplyNewsToStory = async () => {
     if (!selectedNewsItem) return;
 
     let heading = selectedNewsItem.title;
@@ -412,18 +413,45 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
 
     const slug = generateCanonicalSlug(heading) || `news-${Date.now()}`;
-    const fullHtml = `<h2>${selectedNewsItem.title}</h2><p class="lead">${selectedNewsItem.summary}</p>${selectedNewsItem.url ? `<p><a href="${selectedNewsItem.url}" target="_blank" rel="noopener noreferrer">Original source: ${selectedNewsItem.source} &rarr;</a></p>` : ''}`;
+    const cleanSummaryText = selectedNewsItem.summary.replace(/<[^>]*>?/gm, '').trim();
+
+    setScrapingNews(true);
+    let scrapedParagraphs: string[] = [];
+    if (selectedNewsItem.url) {
+      const scrapeResult = await scrapeFullStoryFromUrl(selectedNewsItem.url);
+      if (scrapeResult.success && scrapeResult.paragraphs.length > 0) {
+        scrapedParagraphs = scrapeResult.paragraphs;
+      }
+    }
+    setScrapingNews(false);
+
+    let fullStoryHtml = '';
+    if (scrapedParagraphs.length > 0) {
+      fullStoryHtml = `
+        <h2>${selectedNewsItem.title}</h2>
+        <p class="lead">${cleanSummaryText}</p>
+        ${scrapedParagraphs.map((p) => `<p>${p}</p>`).join('\n')}
+        ${selectedNewsItem.url ? `<p><a href="${selectedNewsItem.url}" target="_blank" rel="noopener noreferrer">Original Wire Source: ${selectedNewsItem.source} &rarr;</a></p>` : ''}
+      `.trim();
+    } else {
+      fullStoryHtml = `
+        <h2>${selectedNewsItem.title}</h2>
+        <p class="lead">${cleanSummaryText}</p>
+        <p>${cleanSummaryText}</p>
+        ${selectedNewsItem.url ? `<p><a href="${selectedNewsItem.url}" target="_blank" rel="noopener noreferrer">Read full dispatch on ${selectedNewsItem.source} &rarr;</a></p>` : ''}
+      `.trim();
+    }
 
     setFormData((prev) => ({
       ...prev,
       heading,
       lead_image_url: selectedNewsItem.image_url || prev.lead_image_url,
-      short_description: `<p>${selectedNewsItem.summary}</p>`,
-      full_story: fullHtml,
+      short_description: `<p>${cleanSummaryText}</p>`,
+      full_story: fullStoryHtml,
       canonical_url: slug,
       keywords: `Market News, ${selectedNewsItem.source}, Stocks, Economy`,
       seo_title: selectedNewsItem.title,
-      seo_description: selectedNewsItem.summary.slice(0, 160),
+      seo_description: cleanSummaryText.slice(0, 160),
       source_url: selectedNewsItem.url,
       section: 'Market News',
       category: 'Market Trends',
@@ -431,7 +459,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     setMessage({
       type: 'success',
-      text: 'Successfully copied news headline, summary, lead image, and wire link into this story draft!',
+      text: scrapedParagraphs.length > 0
+        ? `Successfully scraped ${scrapedParagraphs.length} article paragraphs from ${selectedNewsItem.source} and autofilled story title, summary excerpt, lead image, and full story!`
+        : `Autofilled story title, short description excerpt, lead image, and full story from ${selectedNewsItem.source}!`,
     });
   };
 
@@ -978,10 +1008,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <button
                   type="button"
                   onClick={handleApplyNewsToStory}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white text-xs font-bold transition-all shadow-xs shrink-0"
+                  disabled={scrapingNews}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white text-xs font-bold transition-all shadow-xs shrink-0 disabled:opacity-60"
                 >
-                  <ArrowDownToLine className="w-3.5 h-3.5" />
-                  <span>Autofill Form with this News</span>
+                  {scrapingNews ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Scraping Full Story &amp; Autofilling...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowDownToLine className="w-3.5 h-3.5" />
+                      <span>Autofill Form with this News</span>
+                    </>
+                  )}
                 </button>
               )}
             </div>
