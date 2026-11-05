@@ -362,7 +362,7 @@ export async function saveStory(formData: StoryFormData): Promise<{ success: boo
     section: formData.section,
     category: formData.category,
     heading: formData.heading,
-    lead_image_url: formData.lead_image_url || 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80',
+    lead_image_url: formData.lead_image_url || 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=560&h=320&q=80',
     short_description: formData.short_description || '',
     full_story: formData.full_story || '',
     canonical_url: formData.canonical_url,

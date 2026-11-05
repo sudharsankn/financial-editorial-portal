@@ -31,6 +31,7 @@ import {
   Building2,
   SlidersHorizontal,
   ChevronRight,
+  ChevronLeft,
   Sparkles,
   Zap,
   BookmarkPlus,
@@ -53,8 +54,13 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
   const [syncing, setSyncing] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<UnifiedMarketSyncResults | null>(null);
 
-  // Active view tab after fetch
-  const [activeTab, setActiveTab] = useState<'trending' | 'news' | 'ipo' | 'stock'>('news');
+  // Active view tab after fetch (Market News Wire is default)
+  const [activeTab, setActiveTab] = useState<'news' | 'trending' | 'ipo' | 'stock'>('news');
+  // Language filter for News Wire (Malayalam is primary and default)
+  const [newsLanguage, setNewsLanguage] = useState<'malayalam' | 'all' | 'english'>('malayalam');
+  // Pagination state for News Wire
+  const [newsPage, setNewsPage] = useState<number>(1);
+  const [newsPerPage, setNewsPerPage] = useState<number>(10);
 
   // Loaded database state
   const [trendingStocks, setTrendingStocks] = useState<TrendingStockItem[]>([]);
@@ -197,6 +203,26 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
       {/* 2. POST-FETCH 4 TABS NAVIGATION */}
       <div className="bg-white rounded-lg border border-[#E2E4E8] overflow-hidden shadow-xs">
         <div className="border-b border-[#E2E4E8] bg-[#FAF7FC]/50 px-4 flex items-center gap-2 overflow-x-auto no-scrollbar">
+          {/* TAB 1: Market News Wire FIRST */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('news')}
+            className={`flex items-center gap-2 py-3 px-3 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'news'
+                ? 'border-[#6A1B9A] text-[#6A1B9A]'
+                : 'border-transparent text-[#58606E] hover:text-[#1E2229]'
+            }`}
+          >
+            <Newspaper className="w-4 h-4 text-[#6A1B9A]" />
+            <span>Market News Wire</span>
+            {lastSyncResult?.news.items?.length ? (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30 font-bold">
+                {lastSyncResult.news.items.length} Fetched
+              </span>
+            ) : null}
+          </button>
+
+          {/* TAB 2: Trending Stocks SECOND */}
           <button
             type="button"
             onClick={() => setActiveTab('trending')}
@@ -213,29 +239,7 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('news')}
-            className={`flex items-center gap-2 py-3 px-3 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === 'news'
-                ? 'border-[#6A1B9A] text-[#6A1B9A]'
-                : 'border-transparent text-[#58606E] hover:text-[#1E2229]'
-            }`}
-          >
-            <Newspaper className="w-4 h-4 text-[#6A1B9A]" />
-            <span>Market News Wire</span>
-            {lastSyncResult?.news.items?.length ? (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[#FAF7FC] text-[#6A1B9A] border border-[#6A1B9A]/30 font-bold">
-                {lastSyncResult.news.items.length} Fetched
-              </span>
-            ) : null}
-            {savedNewsList.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30 font-bold">
-                {savedNewsList.length} in DB
-              </span>
-            )}
-          </button>
-
+          {/* TAB 3: IPOs THIRD */}
           <button
             type="button"
             onClick={() => setActiveTab('ipo')}
@@ -252,6 +256,7 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
             </span>
           </button>
 
+          {/* TAB 4: Company Lookup */}
           <button
             type="button"
             onClick={() => setActiveTab('stock')}
@@ -359,92 +364,187 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
         )}
 
         {/* TAB CONTENT: 2. MARKET NEWS */}
-        {activeTab === 'news' && (
-          <div id="section-news-container" className="p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[#E2E4E8]">
-              <div>
-                <h3 className="font-bold text-sm text-[#1E2229] flex items-center gap-1.5">
-                  <Newspaper className="w-4 h-4 text-[#6A1B9A]" />
-                  <span>Real-Time Market News Feed</span>
-                </h3>
-                <p className="text-xs text-[#58606E]">
-                  Browse real-time headlines with lead images and wire URLs. Click <strong>&quot;Save to News Table&quot;</strong> to save any item to <code className="text-xs font-mono">public.news</code> for story drafting.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[#58606E] font-medium">
-                  Saved in DB: <strong>{savedNewsList.length}</strong>
-                </span>
-              </div>
-            </div>
+        {activeTab === 'news' && (() => {
+          const allFetchedNews = lastSyncResult?.news.items || [];
+          const malayalamCount = allFetchedNews.filter(
+            (i) => i.language === 'malayalam' || /[\u0D00-\u0D7F]/.test(i.title)
+          ).length;
+          const englishCount = allFetchedNews.filter(
+            (i) => i.language === 'english' || !/[\u0D00-\u0D7F]/.test(i.title)
+          ).length;
 
-            {/* List of News Items from Latest Fetch */}
-            {lastSyncResult?.news.items && lastSyncResult.news.items.length > 0 ? (
-              <div className="space-y-3">
-                {lastSyncResult.news.items.map((item: NewsItemRecord) => {
-                  const isSaved = savedNewsList.some((s) => s.title.toLowerCase() === item.title.toLowerCase());
-                  const isSavingThis = savingNewsId === item.id;
+          const displayedNews = allFetchedNews.filter((item) => {
+            const isMl = item.language === 'malayalam' || /[\u0D00-\u0D7F]/.test(item.title);
+            if (newsLanguage === 'malayalam') return isMl;
+            if (newsLanguage === 'english') return !isMl;
+            return true;
+          });
 
-                  return (
-                    <div
-                      key={item.id}
-                      className="p-4 rounded-lg border border-[#E2E4E8] bg-white hover:border-[#6A1B9A]/40 transition-all shadow-2xs flex flex-col sm:flex-row items-start gap-4"
+          const totalNewsPages = Math.max(1, Math.ceil(displayedNews.length / newsPerPage));
+          const validNewsPage = Math.min(newsPage, totalNewsPages);
+          const startIndex = (validNewsPage - 1) * newsPerPage;
+          const paginatedNews = displayedNews.slice(startIndex, startIndex + newsPerPage);
+
+          const handleNewsPageChange = (newPage: number) => {
+            const p = Math.max(1, Math.min(newPage, totalNewsPages));
+            setNewsPage(p);
+            const container = document.getElementById('section-news-container');
+            if (container) {
+              container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          };
+
+          return (
+            <div id="section-news-container" className="p-5 space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pb-3 border-b border-[#E2E4E8]">
+                <div>
+                  <h3 className="font-bold text-sm text-[#1E2229] flex items-center gap-1.5">
+                    <Newspaper className="w-4 h-4 text-[#6A1B9A]" />
+                    <span>Real-Time Market News Feed</span>
+                  </h3>
+                  <p className="text-xs text-[#58606E]">
+                    Malayalam financial news is primary &amp; default. Toggle to English or All as needed. Click <strong>&quot;Save to News Table&quot;</strong> to draft stories.
+                  </p>
+                </div>
+
+                {/* Language Switcher Filter: Malayalam first, English second, All at the end */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1 bg-[#F4F4F6] p-1 rounded-md border border-[#E2E4E8]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewsLanguage('malayalam');
+                        setNewsPage(1);
+                      }}
+                      className={`px-3 py-1 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        newsLanguage === 'malayalam'
+                          ? 'bg-[#6A1B9A] text-white shadow-xs'
+                          : 'text-[#58606E] hover:text-[#1E2229]'
+                      }`}
                     >
-                      {/* Image Thumbnail */}
-                      <div className="w-full sm:w-44 h-28 shrink-0 rounded overflow-hidden bg-[#F4F4F6] border border-[#E2E4E8] relative">
-                        <img
-                          src={item.image_url}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src =
-                              'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
-                          }}
-                        />
-                        <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-black/70 text-white backdrop-blur-xs">
-                          {item.source}
-                        </span>
-                      </div>
+                      <span>മലയാളം</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                        newsLanguage === 'malayalam' ? 'bg-white/20 text-white' : 'bg-white text-[#6A1B9A]'
+                      }`}>
+                        {malayalamCount}
+                      </span>
+                    </button>
 
-                      {/* Content details */}
-                      <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FAF7FC] text-[#6A1B9A] border border-[#6A1B9A]/30">
-                              {item.source}
-                            </span>
-                            <span className="text-[11px] text-[#8A92A0]">
-                              {formatTimeAgo(item.pub_date)}
-                            </span>
-                            {isSaved && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30 flex items-center gap-1">
-                                <Check className="w-3 h-3" />
-                                <span>Saved in news table</span>
-                              </span>
-                            )}
-                          </div>
-                          <h4 className="font-bold text-sm text-[#1E2229] leading-snug">
-                            {item.title}
-                          </h4>
-                          <p className="text-xs text-[#58606E] mt-1.5 line-clamp-3 leading-relaxed">
-                            {item.summary}
-                          </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewsLanguage('english');
+                        setNewsPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        newsLanguage === 'english'
+                          ? 'bg-[#6A1B9A] text-white shadow-xs'
+                          : 'text-[#58606E] hover:text-[#1E2229]'
+                      }`}
+                    >
+                      <span>English</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                        newsLanguage === 'english' ? 'bg-white/20 text-white' : 'bg-white text-[#58606E]'
+                      }`}>
+                        {englishCount}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewsLanguage('all');
+                        setNewsPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        newsLanguage === 'all'
+                          ? 'bg-[#6A1B9A] text-white shadow-xs'
+                          : 'text-[#58606E] hover:text-[#1E2229]'
+                      }`}
+                    >
+                      <span>All</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                        newsLanguage === 'all' ? 'bg-white/20 text-white' : 'bg-white text-[#58606E]'
+                      }`}>
+                        {allFetchedNews.length}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* List of News Items from Latest Fetch */}
+              {displayedNews.length > 0 ? (
+                <div className="space-y-3">
+                  {paginatedNews.map((item: NewsItemRecord) => {
+                    const isSaved = savedNewsList.some((s) => s.title.toLowerCase() === item.title.toLowerCase());
+                    const isSavingThis = savingNewsId === item.id;
+                    const isMl = item.language === 'malayalam' || /[\u0D00-\u0D7F]/.test(item.title);
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-4 rounded-lg border border-[#E2E4E8] bg-white hover:border-[#6A1B9A]/40 transition-all shadow-2xs flex flex-col sm:flex-row items-start gap-4"
+                      >
+                        {/* Image Thumbnail */}
+                        <div className="w-full sm:w-44 h-28 shrink-0 rounded overflow-hidden bg-[#F4F4F6] border border-[#E2E4E8] relative">
+                          <img
+                            src={item.image_url}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src =
+                                'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=560&h=320&q=80';
+                            }}
+                          />
+                          <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-black/70 text-white backdrop-blur-xs">
+                            {item.source}
+                          </span>
                         </div>
 
-                        {/* Action buttons */}
-                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-[#F0F1F3]">
-                          {item.url ? (
-                            <a
-                              href={item.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#6A1B9A] hover:underline"
-                            >
-                              <span>Original Article</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          ) : <span />}
+                        {/* Content details */}
+                        <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                isMl
+                                  ? 'bg-[#FAF7FC] text-[#6A1B9A] border border-[#6A1B9A]/30'
+                                  : 'bg-[#F4F4F6] text-[#58606E] border border-[#E2E4E8]'
+                              }`}>
+                                {isMl ? 'മലയാളം' : 'English'} &bull; {item.source}
+                              </span>
+                              <span className="text-[11px] text-[#8A92A0]">
+                                {formatTimeAgo(item.pub_date)}
+                              </span>
+                              {isSaved && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30 flex items-center gap-1">
+                                  <Check className="w-3 h-3" />
+                                  <span>Saved in news table</span>
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="font-['Noto_Sans_Malayalam',_'Open_Sans',_sans-serif] font-bold text-sm text-[#1E2229] leading-snug">
+                              {item.title}
+                            </h4>
+                            <p className="font-['Noto_Sans_Malayalam',_'Open_Sans',_sans-serif] text-xs text-[#58606E] mt-1.5 line-clamp-3 leading-relaxed">
+                              {item.summary}
+                            </p>
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="flex items-center justify-between pt-3 mt-3 border-t border-[#F0F1F3]">
+                            {item.url ? (
+                              <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#6A1B9A] hover:underline"
+                              >
+                                <span>Original Article</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            ) : <span />}
 
                           <button
                             type="button"
@@ -478,6 +578,104 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
                     </div>
                   );
                 })}
+
+                {/* Section News Pagination Bar */}
+                {displayedNews.length > newsPerPage && (
+                  <div
+                    id="section-news-pagination"
+                    className="pt-4 border-t border-[#E2E4E8] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#58606E]"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>
+                        Showing <strong>{startIndex + 1}</strong>–<strong>{Math.min(startIndex + newsPerPage, displayedNews.length)}</strong> of <strong>{displayedNews.length}</strong> dispatches
+                      </span>
+                      <span className="text-[#E2E4E8] hidden sm:inline">|</span>
+                      <div className="flex items-center gap-1.5 hidden sm:flex">
+                        <span>Per page:</span>
+                        <select
+                          value={newsPerPage}
+                          onChange={(e) => {
+                            setNewsPerPage(Number(e.target.value));
+                            setNewsPage(1);
+                          }}
+                          className="px-2 py-1 rounded border border-[#E2E4E8] bg-white text-xs font-semibold text-[#1E2229] focus:outline-none focus:ring-1 focus:ring-[#6A1B9A]"
+                        >
+                          <option value={10}>10</option>
+                          <option value={20}>20</option>
+                          <option value={40}>40</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Page Navigation Controls */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        id="btn-news-prev-page"
+                        onClick={() => handleNewsPageChange(validNewsPage - 1)}
+                        disabled={validNewsPage <= 1}
+                        className="px-2.5 py-1.5 rounded border border-[#E2E4E8] bg-white text-[#1E2229] hover:bg-[#FAF7FC] hover:border-[#6A1B9A]/30 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-[#E2E4E8] transition-all flex items-center gap-1 font-semibold"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Prev</span>
+                      </button>
+
+                      {/* Numeric Page Buttons */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: totalNewsPages }, (_, i) => i + 1)
+                          .filter((p) => {
+                            if (totalNewsPages <= 7) return true;
+                            if (p === 1 || p === totalNewsPages) return true;
+                            return Math.abs(p - validNewsPage) <= 1;
+                          })
+                          .reduce<(number | string)[]>((acc, p, i, arr) => {
+                            if (i > 0 && p - (arr[i - 1] as number) > 1) {
+                              acc.push('...');
+                            }
+                            acc.push(p);
+                            return acc;
+                          }, [])
+                          .map((item, idx) => {
+                            if (item === '...') {
+                              return (
+                                <span key={`ellipsis-${idx}`} className="px-2 text-xs text-[#8A92A0]">
+                                  ...
+                                </span>
+                              );
+                            }
+                            const p = item as number;
+                            const isActive = p === validNewsPage;
+                            return (
+                              <button
+                                key={p}
+                                type="button"
+                                id={`btn-news-page-${p}`}
+                                onClick={() => handleNewsPageChange(p)}
+                                className={`min-w-8 h-8 px-2 rounded text-xs font-bold transition-all ${
+                                  isActive
+                                    ? 'bg-[#6A1B9A] text-white shadow-xs'
+                                    : 'bg-white border border-[#E2E4E8] text-[#58606E] hover:text-[#1E2229] hover:border-[#6A1B9A]/30'
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            );
+                          })}
+                      </div>
+
+                      <button
+                        type="button"
+                        id="btn-news-next-page"
+                        onClick={() => handleNewsPageChange(validNewsPage + 1)}
+                        disabled={validNewsPage >= totalNewsPages}
+                        className="px-2.5 py-1.5 rounded border border-[#E2E4E8] bg-white text-[#1E2229] hover:bg-[#FAF7FC] hover:border-[#6A1B9A]/30 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-[#E2E4E8] transition-all flex items-center gap-1 font-semibold"
+                      >
+                        <span className="hidden sm:inline">Next</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="py-14 text-center text-xs text-[#8A92A0] bg-[#FAF7FC]/30 rounded-lg border border-dashed border-[#E2E4E8]">
@@ -487,7 +685,8 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
               </div>
             )}
           </div>
-        )}
+        );
+      })()}
 
         {/* TAB CONTENT: 3. IPOS */}
         {activeTab === 'ipo' && (

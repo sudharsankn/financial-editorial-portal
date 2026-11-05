@@ -80,19 +80,25 @@ export async function executeUnifiedMarketSync(
 
     // 1. Process News -> Map to rich NewsItemRecord (Does NOT automatically insert into stories)
     const rawNews = apiData?.news?.items || [];
-    const newsItems: NewsItemRecord[] = rawNews.map((item: any, i: number) => ({
-      id: item.id || crypto.randomUUID(),
-      title: String(item.title || 'Market Dispatch').trim(),
-      summary: String(item.summary || item.description || item.title || '').trim(),
-      full_content: item.full_content || item.content || item.summary || item.title || '',
-      image_url: item.image_url || 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80',
-      url: item.url || '',
-      source: item.source || 'Market Wire',
-      pub_date: item.pub_date || item.pubDate || now,
-      category: item.category || 'Market Trends',
-      is_saved_to_db: false,
-      created_at: now,
-    }));
+    const newsItems: NewsItemRecord[] = rawNews.map((item: any, i: number) => {
+      const title = String(item.title || 'Market Dispatch').trim();
+      const summary = String(item.summary || item.description || item.title || '').trim();
+      const isMalayalam = item.language === 'malayalam' || /[\u0D00-\u0D7F]/.test(title + ' ' + summary);
+      return {
+        id: item.id || crypto.randomUUID(),
+        title,
+        summary,
+        full_content: item.full_content || item.content || summary || title,
+        image_url: item.image_url || 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=560&h=320&q=80',
+        url: item.url || '',
+        source: item.source || (isMalayalam ? 'മലയാളം വാർത്ത' : 'Market Wire'),
+        pub_date: item.pub_date || item.pubDate || now,
+        category: item.category || 'Market Trends',
+        language: isMalayalam ? 'malayalam' : 'english',
+        is_saved_to_db: false,
+        created_at: now,
+      };
+    });
 
     // 2. Process Trending -> Save into trending_stocks table (Published)
     const topGainers: TrendingStockItem[] = (apiData?.trending?.topGainers || []).map((g: any, i: number) => ({
@@ -487,7 +493,7 @@ export async function mergeNewsIntoStories(newsArticles: any[]): Promise<number>
     const slug = generateCanonicalSlug(rawTitle) || `market-news-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const leadImg =
       item.image_url ||
-      'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
+      'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=560&h=320&q=80';
 
     const summaryText = item.summary || item.description || '';
     const fullStoryHtml = `
@@ -990,34 +996,34 @@ export async function fetchSavedStockData(options?: {
  * and generates live top gainers & losers for Nifty universe.
  */
 async function runClientSideMarketFallback(symbol: string) {
-  // 1. Fetch Real-Time RSS News with full content and live images from diverse top sources (Reuters, Mint, Business Standard, ET, Bloomberg, NDTV)
+  // 1. Fetch Real-Time RSS News with full content and live images (Malayalam Primary, English Secondary)
   let newsItems: any[] = [];
   try {
-    const [googleFeedRes, mintFeedRes, bsFeedRes, etFeedRes] = await Promise.all([
-      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://news.google.com/rss/search?q=Indian+Stock+Market+when:1d&hl=en-IN&gl=IN&ceid=IN:en')}`).catch(() => null),
+    const [mlFeedRes, dhanamFeedRes, mintFeedRes, etFeedRes] = await Promise.all([
+      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://malayalam.goodreturns.in/rss/feeds/malayalam-money-news-fb.xml')}`).catch(() => null),
+      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://dhanamonline.com/feed')}`).catch(() => null),
       fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://www.livemint.com/rss/markets')}`).catch(() => null),
-      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://www.business-standard.com/rss/markets-106.rss')}`).catch(() => null),
       fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://economictimes.indiatimes.com/markets/stocks/news/rssfeeds/2146842.cms')}`).catch(() => null),
     ]);
 
     const buckets: any[][] = [];
 
-    if (googleFeedRes && googleFeedRes.ok) {
-      const gData = await googleFeedRes.json();
-      if (gData.status === 'ok' && Array.isArray(gData.items)) {
-        buckets.push(gData.items.map((it: any) => ({ ...it, defaultSource: 'Market Desk' })));
+    if (mlFeedRes && mlFeedRes.ok) {
+      const mlData = await mlFeedRes.json();
+      if (mlData.status === 'ok' && Array.isArray(mlData.items)) {
+        buckets.push(mlData.items.map((it: any) => ({ ...it, defaultSource: 'ഗുഡ്‌റിട്ടേൺസ് മലയാളം' })));
+      }
+    }
+    if (dhanamFeedRes && dhanamFeedRes.ok) {
+      const dhanamData = await dhanamFeedRes.json();
+      if (dhanamData.status === 'ok' && Array.isArray(dhanamData.items)) {
+        buckets.push(dhanamData.items.map((it: any) => ({ ...it, defaultSource: 'ധനം ഓൺലൈൻ' })));
       }
     }
     if (mintFeedRes && mintFeedRes.ok) {
       const mintData = await mintFeedRes.json();
       if (mintData.status === 'ok' && Array.isArray(mintData.items)) {
         buckets.push(mintData.items.map((it: any) => ({ ...it, defaultSource: 'LiveMint' })));
-      }
-    }
-    if (bsFeedRes && bsFeedRes.ok) {
-      const bsData = await bsFeedRes.json();
-      if (bsData.status === 'ok' && Array.isArray(bsData.items)) {
-        buckets.push(bsData.items.map((it: any) => ({ ...it, defaultSource: 'Business Standard' })));
       }
     }
     if (etFeedRes && etFeedRes.ok) {
@@ -1043,6 +1049,7 @@ async function runClientSideMarketFallback(symbol: string) {
     }
 
     const seenTitles = new Set();
+    const rawCollected: any[] = [];
     for (const item of collected) {
       const rawTitle = item.title || 'Market Dispatch';
       const parts = rawTitle.split(' - ');
@@ -1079,10 +1086,12 @@ async function runClientSideMarketFallback(symbol: string) {
       }
 
       if (!image_url || image_url.length < 5) {
-        image_url = 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
+        image_url = 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=560&h=320&q=80';
       }
 
-      newsItems.push({
+      const isMalayalam = /[\u0D00-\u0D7F]/.test(title + ' ' + cleanSummary);
+
+      rawCollected.push({
         id: crypto.randomUUID(),
         title,
         summary: cleanSummary,
@@ -1092,33 +1101,60 @@ async function runClientSideMarketFallback(symbol: string) {
         pub_date: item.pubDate || new Date().toISOString(),
         image_url,
         category: 'Market Trends',
+        language: isMalayalam ? 'malayalam' : 'english',
         is_saved_to_db: false,
       });
-
-      if (newsItems.length >= 30) break;
     }
+
+    // Malayalam is primary (first), followed by English
+    const mlList = rawCollected.filter((i) => i.language === 'malayalam');
+    const enList = rawCollected.filter((i) => i.language === 'english');
+    newsItems = [...mlList, ...enList].slice(0, 40);
   } catch (err) {
     console.warn('Real-time RSS fetch fallback warning:', err);
   }
 
-  // Fallback news if RSS call was throttled or empty
+  // Fallback news if RSS call was throttled or empty (Malayalam Primary, English Secondary)
   if (newsItems.length === 0) {
     newsItems = [
       {
-        title: 'Sensex, Nifty Surge on Strong FII Inflows and Robust Quarterly Earnings',
-        summary: 'Indian benchmark indices continued their upward momentum led by heavyweights Reliance and HDFC Bank.',
-        url: 'https://news.google.com',
-        source: 'Market Wire',
+        id: crypto.randomUUID(),
+        title: 'ഓഹരി വിപണിയിൽ വൻ മുന്നേറ്റം; സെൻസെക്സ് 79,000 കടന്നു, നിഫ്റ്റി സർവകാല റെക്കോർഡിൽ',
+        summary: 'വിദേശ നിക്ഷേപകരുടെ ശക്തമായ വാങ്ങലും ബാങ്കിംഗ് ഓഹരികളുടെ കുതിപ്പും ഇന്ത്യൻ വിപണിയെ പുതിയ ഉയരങ്ങളിലേക്ക് നയിച്ചു. റിലയൻസും എച്ച്ഡിഎഫ്സിയും മികച്ച നേട്ടം കൈവരിച്ചു.',
+        full_content: 'വിദേശ നിക്ഷേപകരുടെ ശക്തമായ വാങ്ങലും ബാങ്കിംഗ് ഓഹരികളുടെ കുതിപ്പും ഇന്ത്യൻ വിപണിയെ പുതിയ ഉയരങ്ങളിലേക്ക് നയിച്ചു. റിലയൻസും എച്ച്ഡിഎഫ്സിയും മികച്ച നേട്ടം കൈവരിച്ചു.',
+        url: 'https://dhanamonline.com',
+        source: 'ധനം ഓൺലൈൻ',
         pub_date: new Date().toISOString(),
-        topics: ['Market Trends', 'Markets'],
+        image_url: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=560&h=320&q=80',
+        category: 'Market Trends',
+        language: 'malayalam',
+        is_saved_to_db: false,
       },
       {
-        title: 'FIIs Turn Net Buyers in Domestic Equities Ahead of Festive Season',
-        summary: 'Institutional buying accelerated across banking and consumer stocks as liquidity improved.',
-        url: 'https://news.google.com',
-        source: 'Financial Express',
+        id: crypto.randomUUID(),
+        title: 'മ്യൂച്വൽ ഫണ്ട് നിക്ഷേപങ്ങളിൽ 28% വർധന; ചെറുകിട നിക്ഷേപകരുടെ എണ്ണത്തിൽ ചരിത്ര നേട്ടം',
+        summary: 'എസ്ഐപി വഴിയുള്ള പ്രതിമാസ നിക്ഷേപം 22,000 കോടി രൂപ കവിഞ്ഞു. യുവാക്കൾക്കിടയിൽ ഓഹരി അധിഷ്ഠിത മ്യൂച്വൽ ഫണ്ടുകളോടുള്ള താല്പര്യം വർധിക്കുന്നതായി ആംഫി റിപ്പോർട്ട്.',
+        full_content: 'എസ്ഐപി വഴിയുള്ള പ്രതിമാസ നിക്ഷേപം 22,000 കോടി രൂപ കവിഞ്ഞു. യുവാക്കൾക്കിടയിൽ ഓഹരി അധിഷ്ഠിത മ്യൂച്വൽ ഫണ്ടുകളോടുള്ള താല്പര്യം വർധിക്കുന്നതായി ആംഫി റിപ്പോർട്ട്.',
+        url: 'https://dhanamonline.com',
+        source: 'ധനകാര്യ പ്ലാനിംഗ്',
         pub_date: new Date().toISOString(),
-        topics: ['Economy', 'Markets'],
+        image_url: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=560&h=320&q=80',
+        category: 'Financial Planning',
+        language: 'malayalam',
+        is_saved_to_db: false,
+      },
+      {
+        id: crypto.randomUUID(),
+        title: 'Sensex, Nifty Surge on Strong FII Inflows and Robust Quarterly Earnings',
+        summary: 'Indian benchmark indices continued their upward momentum led by heavyweights Reliance and HDFC Bank.',
+        full_content: 'Indian benchmark indices continued their upward momentum led by heavyweights Reliance and HDFC Bank.',
+        url: 'https://www.livemint.com',
+        source: 'LiveMint',
+        pub_date: new Date().toISOString(),
+        image_url: 'https://images.unsplash.com/photo-1579532537598-459ecdaf39cc?auto=format&fit=crop&w=560&h=320&q=80',
+        category: 'Market Trends',
+        language: 'english',
+        is_saved_to_db: false,
       },
     ];
   }

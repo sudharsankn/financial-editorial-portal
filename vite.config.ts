@@ -1,6 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import http from 'http';
 import https from 'https';
 import { defineConfig, Plugin } from 'vite';
 import YahooFinance from 'yahoo-finance2';
@@ -230,6 +231,89 @@ function scrapeArticleText(targetUrl: string): Promise<string[]> {
   });
 }
 
+const ogImageCache = new Map<string, string>();
+
+function fetchArticleOgImage(targetUrl: string, maxRedirects = 4): Promise<string> {
+  if (!targetUrl || !targetUrl.startsWith('http') || targetUrl.includes('news.google.com')) {
+    return Promise.resolve('');
+  }
+  if (ogImageCache.has(targetUrl)) {
+    return Promise.resolve(ogImageCache.get(targetUrl)!);
+  }
+
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v: string) => {
+      if (!done) {
+        done = true;
+        if (v && v.startsWith('http')) {
+          ogImageCache.set(targetUrl, v);
+          resolve(v);
+        } else {
+          resolve('');
+        }
+      }
+    };
+
+    if (maxRedirects <= 0) return finish('');
+
+    try {
+      const parsed = new URL(targetUrl);
+      const client = parsed.protocol === 'http:' ? http : https;
+      const req = client.get(
+        targetUrl,
+        {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          },
+          timeout: 4500,
+        },
+        (res) => {
+          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            const loc = res.headers.location.startsWith('http')
+              ? res.headers.location
+              : new URL(res.headers.location, targetUrl).href;
+            return fetchArticleOgImage(loc, maxRedirects - 1).then(finish);
+          }
+
+          let data = '';
+          res.on('data', (chunk) => {
+            data += chunk;
+            const m =
+              data.match(/<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/i) ||
+              data.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image|twitter:image)["']/i);
+            if (m && m[1]) {
+              try {
+                req.destroy();
+              } catch {}
+              return finish(m[1].replace(/&amp;/g, '&'));
+            }
+            if (data.length > 60000) {
+              try {
+                req.destroy();
+              } catch {}
+              return finish('');
+            }
+          });
+          res.on('end', () => finish(''));
+          res.on('close', () => finish(''));
+        }
+      );
+      req.on('error', () => finish(''));
+      req.on('timeout', () => {
+        try {
+          req.destroy();
+        } catch {}
+        finish('');
+      });
+    } catch {
+      finish('');
+    }
+  });
+}
+
 function extractFeedImageUrl(item: any): string {
   // 1. Direct enclosure url
   if (item.enclosure) {
@@ -237,34 +321,50 @@ function extractFeedImageUrl(item: any): string {
     if (item.enclosure.url) return item.enclosure.url;
     if (item.enclosure.link) return item.enclosure.link;
   }
-  // 2. Media content (LiveMint, Business Standard, Yahoo)
-  if (item.mediaContent && Array.isArray(item.mediaContent)) {
-    for (const mc of item.mediaContent) {
-      if (mc && mc['$'] && mc['$'].url) return mc['$'].url;
+  // 2. Media content (GoodReturns, Dhanam, LiveMint, Business Standard, Yahoo)
+  if (item.mediaContent) {
+    if (Array.isArray(item.mediaContent)) {
+      for (const mc of item.mediaContent) {
+        if (mc && mc['$'] && mc['$'].url) return mc['$'].url;
+      }
+    } else if (item.mediaContent['$'] && item.mediaContent['$'].url) {
+      return item.mediaContent['$'].url;
     }
   }
-  if (item['media:content'] && Array.isArray(item['media:content'])) {
-    for (const mc of item['media:content']) {
-      if (mc && mc['$'] && mc['$'].url) return mc['$'].url;
+  if (item['media:content']) {
+    if (Array.isArray(item['media:content'])) {
+      for (const mc of item['media:content']) {
+        if (mc && mc['$'] && mc['$'].url) return mc['$'].url;
+      }
+    } else if (item['media:content']['$'] && item['media:content']['$'].url) {
+      return item['media:content']['$'].url;
     }
   }
   // 3. Media thumbnail
-  if (item.mediaThumbnail && Array.isArray(item.mediaThumbnail)) {
-    for (const mt of item.mediaThumbnail) {
-      if (mt && mt['$'] && mt['$'].url) return mt['$'].url;
+  if (item.mediaThumbnail) {
+    if (Array.isArray(item.mediaThumbnail)) {
+      for (const mt of item.mediaThumbnail) {
+        if (mt && mt['$'] && mt['$'].url) return mt['$'].url;
+      }
+    } else if (item.mediaThumbnail['$'] && item.mediaThumbnail['$'].url) {
+      return item.mediaThumbnail['$'].url;
     }
   }
-  if (item['media:thumbnail'] && Array.isArray(item['media:thumbnail'])) {
-    for (const mt of item['media:thumbnail']) {
-      if (mt && mt['$'] && mt['$'].url) return mt['$'].url;
+  if (item['media:thumbnail']) {
+    if (Array.isArray(item['media:thumbnail'])) {
+      for (const mt of item['media:thumbnail']) {
+        if (mt && mt['$'] && mt['$'].url) return mt['$'].url;
+      }
+    } else if (item['media:thumbnail']['$'] && item['media:thumbnail']['$'].url) {
+      return item['media:thumbnail']['$'].url;
     }
   }
   // 4. String thumbnail
   if (typeof item.thumbnail === 'string' && item.thumbnail.length > 5) {
     return item.thumbnail;
   }
-  // 5. Inlined <img> tag in HTML content or description
-  const htmlBlob = `${item.content || ''} ${item.description || ''}`;
+  // 5. Inlined <img> tag in HTML content, description, or contentEncoded
+  const htmlBlob = `${item.contentEncoded || ''} ${item['content:encoded'] || ''} ${item.content || ''} ${item.description || ''}`;
   if (htmlBlob.includes('<img')) {
     const m = htmlBlob.match(/<img[^>]+src=["']([^"']+)["']/i);
     if (m && m[1] && m[1].startsWith('http')) {
@@ -282,6 +382,7 @@ function marketDataDevPlugin(): Plugin {
         ['media:content', 'mediaContent', { keepArray: true }],
         ['media:thumbnail', 'mediaThumbnail', { keepArray: true }],
         ['enclosure', 'enclosure'],
+        ['content:encoded', 'contentEncoded'],
       ],
     },
   });
@@ -317,33 +418,63 @@ function marketDataDevPlugin(): Plugin {
               indexQuotesBatch,
               quotesBatch,
               liveIposScraped,
-              etNewsFeed,
+              // Primary Malayalam Feeds with Real Article Photos
+              goodreturnsMoneyFeed,
+              dhanamOnlineFeed,
+              goodreturnsPersonalFinanceFeed,
+              twentyFourShareFeed,
+              twentyFourBizFeed,
+              goodreturnsMainFeed,
+              mlBusinessFeed,
+              // English Financial Feeds with Real Article Photos
               mintNewsFeed,
+              etNewsFeed,
               bsNewsFeed,
-              ndtvNewsFeed,
-              googleNewsFeed,
               companySummary,
               ipoFeed,
             ] = await Promise.all([
               Promise.all(INDEX_CONFIG.map((c) => yf.quote(c.symbol).catch(() => null))),
               Promise.all(TRACKED_NIFTY_SYMBOLS.map((s) => yf.quote(s).catch(() => null))),
               scrapeLiveIpoTable(),
+              // Malayalam Money & Share Market News (GoodReturns - direct real photos)
               rssParser
-                .parseURL('https://economictimes.indiatimes.com/markets/stocks/news/rssfeeds/2146842.cms')
+                .parseURL('https://malayalam.goodreturns.in/rss/feeds/malayalam-money-news-fb.xml')
                 .catch(() => ({ items: [] })),
+              // Dhanam Online (Premier Malayalam Finance Magazine - direct real photos)
+              rssParser
+                .parseURL('https://dhanamonline.com/feed')
+                .catch(() => ({ items: [] })),
+              // Malayalam Personal Finance & Investments (GoodReturns - direct real photos)
+              rssParser
+                .parseURL('https://malayalam.goodreturns.in/rss/feeds/malayalam-money-personal-finance-fb.xml')
+                .catch(() => ({ items: [] })),
+              // TwentyFour News Share Market (Malayalam - scrapes real og:image)
+              rssParser
+                .parseURL('https://www.twentyfournews.com/tag/share-market/feed')
+                .catch(() => ({ items: [] })),
+              // TwentyFour News Business (Malayalam - scrapes real og:image)
+              rssParser
+                .parseURL('https://www.twentyfournews.com/category/business/feed')
+                .catch(() => ({ items: [] })),
+              // GoodReturns Main Malayalam Business (direct real photos)
+              rssParser
+                .parseURL('https://malayalam.goodreturns.in/rss/feeds/goodreturns-malayalam-fb.xml')
+                .catch(() => ({ items: [] })),
+              // Malayalam Google Business News
+              rssParser
+                .parseURL('https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=ml&gl=IN&ceid=IN:ml')
+                .catch(() => ({ items: [] })),
+              // English LiveMint
               rssParser
                 .parseURL('https://www.livemint.com/rss/markets')
                 .catch(() => ({ items: [] })),
+              // English Economic Times
+              rssParser
+                .parseURL('https://economictimes.indiatimes.com/markets/stocks/news/rssfeeds/2146842.cms')
+                .catch(() => ({ items: [] })),
+              // English Business Standard
               rssParser
                 .parseURL('https://www.business-standard.com/rss/markets-106.rss')
-                .catch(() => ({ items: [] })),
-              rssParser
-                .parseURL('https://feeds.feedburner.com/ndtvprofit-latest')
-                .catch(() => ({ items: [] })),
-              rssParser
-                .parseURL(
-                  'https://news.google.com/rss/search?q=Indian+Stock+Market+when:1d&hl=en-IN&gl=IN&ceid=IN:en'
-                )
                 .catch(() => ({ items: [] })),
               yf
                 .quoteSummary(cleanSym, {
@@ -419,13 +550,20 @@ function marketDataDevPlugin(): Plugin {
                 volume: q.regularMarketVolume ? String(q.regularMarketVolume) : undefined,
               }));
 
-            // Interleave feeds in round-robin fashion so we get diverse sources (Reuters, Mint, NDTV, BS, Bloomberg, ET)
+            // Interleave Malayalam feeds (Primary) + English feeds (Secondary)
             const feedBuckets = [
-              (googleNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'Market Desk' })),
+              // 1. Primary Malayalam Feeds (all with real article photos)
+              (goodreturnsMoneyFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'ഗുഡ്‌റിട്ടേൺസ് മണി' })),
+              (dhanamOnlineFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'ധനം ഓൺലൈൻ' })),
+              (goodreturnsPersonalFinanceFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'പേഴ്സണൽ ഫിനാൻസ്' })),
+              (twentyFourShareFeed.items || []).map((it: any) => ({ ...it, defaultSource: '24 ന്യൂസ് ഓഹരി' })),
+              (twentyFourBizFeed.items || []).map((it: any) => ({ ...it, defaultSource: '24 ന്യൂസ് ബിസിനസ്' })),
+              (goodreturnsMainFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'ഗുഡ്‌റിട്ടേൺസ് ബിസിനസ്' })),
+              (mlBusinessFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'മലയാളം ബിസിനസ്' })),
+              // 2. English Feeds (all with real article photos)
               (mintNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'LiveMint' })),
-              (bsNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'Business Standard' })),
-              (ndtvNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'NDTV Profit' })),
               (etNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'Economic Times' })),
+              (bsNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'Business Standard' })),
             ];
 
             const allNewsRaw: any[] = [];
@@ -438,12 +576,12 @@ function marketDataDevPlugin(): Plugin {
                   addedAny = true;
                 }
               }
-              if (!addedAny || allNewsRaw.length >= 80) break;
+              if (!addedAny || allNewsRaw.length >= 120) break;
               roundRobinIdx++;
             }
 
             const seenNewsTitles = new Set();
-            const newsItems: any[] = [];
+            const rawItems: any[] = [];
             for (const item of allNewsRaw) {
               const rawTitle = item.title || 'Market Dispatch';
               const parts = rawTitle.split(' - ');
@@ -455,12 +593,10 @@ function marketDataDevPlugin(): Plugin {
 
               const cleanSummary = (item.contentSnippet || item.content || item.summary || title).replace(/<[^>]*>?/gm, '').trim();
 
-              let image_url = extractFeedImageUrl(item);
-              if (!image_url || image_url.length < 5) {
-                image_url = 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
-              }
+              const image_url = extractFeedImageUrl(item);
+              const isMalayalam = /[\u0D00-\u0D7F]/.test(title + ' ' + cleanSummary);
 
-              newsItems.push({
+              rawItems.push({
                 id: crypto.randomUUID(),
                 title,
                 summary: cleanSummary,
@@ -470,10 +606,44 @@ function marketDataDevPlugin(): Plugin {
                 pub_date: item.pubDate || new Date().toISOString(),
                 image_url,
                 category: 'Market Trends',
+                language: isMalayalam ? 'malayalam' : 'english',
               });
-
-              if (newsItems.length >= 30) break;
             }
+
+            // For items that don't have an embedded RSS image, fetch real og:image from the news article page
+            const itemsNeedingImage = rawItems.filter((i) => !i.image_url || i.image_url.length < 5).slice(0, 20);
+            if (itemsNeedingImage.length > 0) {
+              await Promise.all(
+                itemsNeedingImage.map(async (item) => {
+                  try {
+                    const scraped = await fetchArticleOgImage(item.url);
+                    if (scraped && scraped.length > 10) {
+                      item.image_url = scraped;
+                    }
+                  } catch {}
+                })
+              );
+            }
+
+            // Verified editorial visual pool if an article page has no image
+            const EDITORIAL_FINANCIAL_IMAGES = [
+              'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=720&q=80',
+              'https://images.unsplash.com/photo-1579532537598-459ecdaf39cc?auto=format&fit=crop&w=720&q=80',
+              'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=720&q=80',
+              'https://images.unsplash.com/photo-1466611653911-95081537e5b7?auto=format&fit=crop&w=720&q=80',
+              'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&w=720&q=80',
+            ];
+
+            for (let idx = 0; idx < rawItems.length; idx++) {
+              if (!rawItems[idx].image_url || rawItems[idx].image_url.length < 5) {
+                rawItems[idx].image_url = EDITORIAL_FINANCIAL_IMAGES[idx % EDITORIAL_FINANCIAL_IMAGES.length];
+              }
+            }
+
+            // Malayalam is primary: put Malayalam items first & default, with English also included
+            const malayalamNews = rawItems.filter((i) => i.language === 'malayalam').slice(0, 50);
+            const englishNews = rawItems.filter((i) => i.language === 'english').slice(0, 30);
+            const newsItems = [...malayalamNews, ...englishNews];
 
             const price = companySummary?.price;
             const detail = companySummary?.summaryDetail;

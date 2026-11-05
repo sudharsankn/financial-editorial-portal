@@ -13,7 +13,7 @@ import {
 
 interface HedgeNavbarProps {
   onNavigateHome: () => void;
-  onOpenSidebar: () => void;
+  onOpenSidebar?: () => void;
   onOpenAdmin: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
@@ -21,6 +21,7 @@ interface HedgeNavbarProps {
   bookmarkCount: number;
   onOpenBookmarks: () => void;
   onOpenSubscribe: () => void;
+  isBookmarksActive?: boolean;
 }
 
 export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
@@ -33,6 +34,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
   bookmarkCount,
   onOpenBookmarks,
   onOpenSubscribe,
+  isBookmarksActive = false,
 }) => {
   const [showSearch, setShowSearch] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
@@ -47,31 +49,18 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
     <>
       <header id="section-header-navbar" className="sticky top-0 z-40 bg-white border-b border-[#E6E6E6] shadow-xs">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14 h-[60px] flex items-center justify-between">
-          {/* Left: Hamburger Menu */}
-          <div className="w-1/3 flex items-center">
-            <button
-              id="btn-navbar-menu"
-              type="button"
-              onClick={onOpenSidebar}
-              className="p-2 -ml-2 text-[#262B2E] hover:text-[#903E97] transition-colors focus:outline-none"
-              aria-label="Open Navigation Menu"
-            >
-              <Menu className="w-6 h-6 stroke-[2.2]" />
-            </button>
-          </div>
-
-          {/* Center: Hedge Ohari Brand Logo */}
-          <div className="w-1/3 flex items-center justify-center">
+          {/* Left: Hedge Ohari Brand Logo */}
+          <div className="flex items-center">
             <button
               id="btn-navbar-logo"
               type="button"
               onClick={onNavigateHome}
-              className="focus:outline-none cursor-pointer group flex items-center justify-center"
+              className="focus:outline-none cursor-pointer group flex items-center gap-2"
             >
               <img
                 src="/hedge-ohari-logo.svg"
                 alt="Hedge Ohari"
-                className="h-[46px] sm:h-[50px] w-auto object-contain transition-transform group-hover:scale-[1.02]"
+                className="h-[44px] sm:h-[48px] w-auto object-contain transition-transform group-hover:scale-[1.02]"
                 onError={(e) => {
                   // Fallback text if SVG fails
                   const target = e.currentTarget;
@@ -80,7 +69,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
                   if (fallback) fallback.style.display = 'block';
                 }}
               />
-              <div id="hedge-logo-fallback" style={{ display: 'none' }} className="text-center">
+              <div id="hedge-logo-fallback" style={{ display: 'none' }} className="text-left">
                 <span className="font-['Open_Sans'] font-black text-2xl text-[#903E97] tracking-tight">
                   HEDGE <span className="font-normal text-[#262B2E]">ഓഹരി</span>
                 </span>
@@ -89,7 +78,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
           </div>
 
           {/* Right: Subscribe, Bookmark Count, Search, Sign In / Admin */}
-          <div className="w-1/3 flex items-center justify-end gap-2 sm:gap-4 text-xs font-semibold">
+          <div className="flex items-center justify-end gap-2 sm:gap-4 text-xs font-semibold">
             {/* Subscribe Button */}
             <button
               id="btn-navbar-subscribe"
@@ -105,8 +94,12 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
               id="btn-navbar-bookmarks"
               type="button"
               onClick={onOpenBookmarks}
-              className="flex items-center gap-1 text-[#262B2E] hover:text-[#903E97] p-1.5 transition-colors"
-              title="Saved Articles"
+              className={`flex items-center gap-1.5 p-1.5 rounded transition-all cursor-pointer ${
+                isBookmarksActive
+                  ? 'bg-[#FAF7FC] text-[#903E97] ring-1 ring-[#903E97]/40 shadow-2xs font-bold'
+                  : 'text-[#262B2E] hover:text-[#903E97]'
+              }`}
+              title={isBookmarksActive ? 'Viewing Bookmarked Articles (Click to view all)' : 'View Bookmarked Articles'}
             >
               <Bookmark className="w-4 h-4 fill-current text-[#903E97]" />
               <span className="text-xs font-bold font-mono">{bookmarkCount}</span>

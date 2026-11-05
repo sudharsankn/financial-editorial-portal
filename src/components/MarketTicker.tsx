@@ -172,113 +172,122 @@ export const MarketTicker: React.FC<MarketTickerProps> = ({
         isPaused ? 'ticker-paused' : ''
       }`}
     >
-      <div className="max-w-[100vw] mx-auto flex items-center">
+      <div className="max-w-[100vw] mx-auto flex flex-col sm:flex-row sm:items-center">
         {/* ========================================================= */}
         {/* LEFT CONTROL STRIP: Status & View Switcher               */}
         {/* ========================================================= */}
-        <div id="ticker-control-strip" className="flex items-center gap-2 px-3 py-2 bg-[#0A0E17] border-r border-[#1E2638] shrink-0 z-30 shadow-[4px_0_12px_rgba(0,0,0,0.3)]">
-          {/* Live Market Indicator */}
-          <div id="ticker-live-indicator" className="flex items-center gap-1.5 pr-2 border-r border-[#1E2638]">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00E676] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00E676]"></span>
-            </span>
-            <span className="text-[10px] font-black tracking-wider text-[#00E676] uppercase hidden sm:inline">
-              LIVE
-            </span>
+        <div
+          id="ticker-control-strip"
+          className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 px-3 py-1.5 sm:py-2 bg-[#0A0E17] border-b sm:border-b-0 sm:border-r border-[#1E2638] shrink-0 z-30 shadow-[4px_0_12px_rgba(0,0,0,0.3)]"
+        >
+          {/* Group 1: Live Status & Filters */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Live Market Indicator */}
+            <div id="ticker-live-indicator" className="flex items-center gap-1.5 pr-2 border-r border-[#1E2638]">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00E676] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00E676]"></span>
+              </span>
+              <span className="text-[10px] font-black tracking-wider text-[#00E676] uppercase">
+                LIVE
+              </span>
+            </div>
+
+            {/* Quick Pill Filter */}
+            <div id="ticker-filter-pills" className="flex items-center gap-1 bg-[#141A29] p-0.5 rounded-md border border-[#232D42]">
+              <button
+                id="btn-ticker-filter-all"
+                type="button"
+                onClick={() => setActiveFilter('all')}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  activeFilter === 'all'
+                    ? 'bg-[#903E97] text-white shadow-xs'
+                    : 'text-[#8C98AC] hover:text-white'
+                }`}
+              >
+                All
+              </button>
+              <button
+                id="btn-ticker-filter-indices"
+                type="button"
+                onClick={() => setActiveFilter('indices')}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  activeFilter === 'indices'
+                    ? 'bg-[#903E97] text-white shadow-xs'
+                    : 'text-[#8C98AC] hover:text-white'
+                }`}
+              >
+                Indices
+              </button>
+              <button
+                id="btn-ticker-filter-movers"
+                type="button"
+                onClick={() => setActiveFilter('movers')}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all flex items-center gap-0.5 ${
+                  activeFilter === 'movers'
+                    ? 'bg-[#903E97] text-white shadow-xs'
+                    : 'text-[#8C98AC] hover:text-white'
+                }`}
+              >
+                <Flame className="w-2.5 h-2.5 text-[#FF9100]" />
+                <span>Movers</span>
+              </button>
+              <button
+                id="btn-ticker-filter-ipos"
+                type="button"
+                onClick={() => setActiveFilter('ipos')}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all flex items-center gap-0.5 ${
+                  activeFilter === 'ipos'
+                    ? 'bg-[#903E97] text-white shadow-xs'
+                    : 'text-[#8C98AC] hover:text-white'
+                }`}
+              >
+                <Rocket className="w-2.5 h-2.5 text-[#A855F7]" />
+                <span>IPOs</span>
+              </button>
+            </div>
           </div>
 
-          {/* Quick Pill Filter */}
-          <div id="ticker-filter-pills" className="flex items-center gap-1 bg-[#141A29] p-0.5 rounded-md border border-[#232D42]">
+          {/* Group 2: Pause and Speed Controls */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Play / Pause Toggle Button */}
             <button
-              id="btn-ticker-filter-all"
+              id="btn-ticker-play-pause"
               type="button"
-              onClick={() => setActiveFilter('all')}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                activeFilter === 'all'
-                  ? 'bg-[#903E97] text-white shadow-xs'
-                  : 'text-[#8C98AC] hover:text-white'
-              }`}
+              onClick={() => setIsPaused(!isPaused)}
+              title={isPaused ? 'Resume live scrolling' : 'Pause ticker to read'}
+              className="p-1 rounded bg-[#141A29] hover:bg-[#1E2638] text-[#8C98AC] hover:text-white border border-[#232D42] transition-colors"
             >
-              All
+              {isPaused ? <Play className="w-2.5 h-2.5" /> : <Pause className="w-2.5 h-2.5" />}
             </button>
+
+            {/* Speed Toggle (Extra Slow 0.5x / Slow 0.75x / Standard 1.0x) */}
             <button
-              id="btn-ticker-filter-indices"
+              id="btn-ticker-speed"
               type="button"
-              onClick={() => setActiveFilter('indices')}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                activeFilter === 'indices'
-                  ? 'bg-[#903E97] text-white shadow-xs'
-                  : 'text-[#8C98AC] hover:text-white'
-              }`}
+              onClick={() => {
+                setTickerSpeed((prev) =>
+                  prev === 'extra-slow' ? 'slow' : prev === 'slow' ? 'standard' : 'extra-slow'
+                );
+              }}
+              title={`Speed: ${
+                tickerSpeed === 'extra-slow'
+                  ? 'Ultra Slow (180s - 0.5x)'
+                  : tickerSpeed === 'slow'
+                  ? 'Slow (120s - 0.75x)'
+                  : 'Standard (80s - 1.0x)'
+              }. Click to cycle.`}
+              className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#141A29] hover:bg-[#1E2638] text-[#8C98AC] hover:text-white border border-[#232D42] transition-colors tabular-nums"
             >
-              Indices
-            </button>
-            <button
-              id="btn-ticker-filter-movers"
-              type="button"
-              onClick={() => setActiveFilter('movers')}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all flex items-center gap-0.5 ${
-                activeFilter === 'movers'
-                  ? 'bg-[#903E97] text-white shadow-xs'
-                  : 'text-[#8C98AC] hover:text-white'
-              }`}
-            >
-              <Flame className="w-2.5 h-2.5 text-[#FF9100]" />
-              <span>Movers</span>
-            </button>
-            <button
-              id="btn-ticker-filter-ipos"
-              type="button"
-              onClick={() => setActiveFilter('ipos')}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all flex items-center gap-0.5 ${
-                activeFilter === 'ipos'
-                  ? 'bg-[#903E97] text-white shadow-xs'
-                  : 'text-[#8C98AC] hover:text-white'
-              }`}
-            >
-              <Rocket className="w-2.5 h-2.5 text-[#A855F7]" />
-              <span>IPOs</span>
+              {tickerSpeed === 'extra-slow' ? '0.5x' : tickerSpeed === 'slow' ? '0.75x' : '1.0x'}
             </button>
           </div>
-
-          {/* Play / Pause Toggle Button */}
-          <button
-            id="btn-ticker-play-pause"
-            type="button"
-            onClick={() => setIsPaused(!isPaused)}
-            title={isPaused ? 'Resume live scrolling' : 'Pause ticker to read'}
-            className="p-1 rounded bg-[#141A29] hover:bg-[#1E2638] text-[#8C98AC] hover:text-white border border-[#232D42] transition-colors"
-          >
-            {isPaused ? <Play className="w-2.5 h-2.5" /> : <Pause className="w-2.5 h-2.5" />}
-          </button>
-
-          {/* Speed Toggle (Extra Slow 0.5x / Slow 0.75x / Standard 1.0x) */}
-          <button
-            id="btn-ticker-speed"
-            type="button"
-            onClick={() => {
-              setTickerSpeed((prev) =>
-                prev === 'extra-slow' ? 'slow' : prev === 'slow' ? 'standard' : 'extra-slow'
-              );
-            }}
-            title={`Speed: ${
-              tickerSpeed === 'extra-slow'
-                ? 'Ultra Slow (180s - 0.5x)'
-                : tickerSpeed === 'slow'
-                ? 'Slow (120s - 0.75x)'
-                : 'Standard (80s - 1.0x)'
-            }. Click to cycle.`}
-            className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#141A29] hover:bg-[#1E2638] text-[#8C98AC] hover:text-white border border-[#232D42] transition-colors tabular-nums"
-          >
-            {tickerSpeed === 'extra-slow' ? '0.5x' : tickerSpeed === 'slow' ? '0.75x' : '1.0x'}
-          </button>
         </div>
 
         {/* ========================================================= */}
         {/* CENTER: INFINITE SMOOTH SCROLLING MARQUEE TRACK           */}
         {/* ========================================================= */}
-        <div id="ticker-scroller-container" className="overflow-hidden flex-1 relative py-1.5">
+        <div id="ticker-scroller-container" className="overflow-hidden w-full sm:flex-1 relative py-1.5">
           {marqueeItems.length === 0 ? (
             <div id="ticker-loading-message" className="px-4 text-[11px] text-[#8C98AC] italic">
               Loading market ticker data...

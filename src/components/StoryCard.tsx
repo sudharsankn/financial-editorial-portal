@@ -8,16 +8,22 @@ interface StoryCardProps {
   story: Story;
   onSelectStory: (canonicalUrl: string) => void;
   featured?: boolean;
+  isBookmarked?: boolean;
+  onToggleBookmark?: () => void;
 }
 
 export const StoryCard: React.FC<StoryCardProps> = ({
   story,
   onSelectStory,
   featured = false,
+  isBookmarked,
+  onToggleBookmark,
 }) => {
   const [imgError, setImgError] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const isSaved = isBookmarked !== undefined ? isBookmarked : bookmarked;
 
   const script = detectScript(story.heading);
   const isRTL = script.isRTL;
@@ -39,7 +45,11 @@ export const StoryCard: React.FC<StoryCardProps> = ({
 
   const handleBookmark = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setBookmarked(!bookmarked);
+    if (onToggleBookmark) {
+      onToggleBookmark();
+    } else {
+      setBookmarked(!bookmarked);
+    }
   };
 
   // Determine relative published time (e.g., "1 min ago", "2 hours ago")
@@ -56,7 +66,7 @@ export const StoryCard: React.FC<StoryCardProps> = ({
         {/* Lead Image Container */}
         <div className="relative aspect-[7/4] bg-[#EBEEF7] overflow-hidden">
           <img
-            src={imgError ? 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80' : story.lead_image_url}
+            src={imgError ? 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=560&h=320&q=80' : story.lead_image_url}
             alt={story.heading}
             onError={() => setImgError(true)}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
@@ -146,12 +156,12 @@ export const StoryCard: React.FC<StoryCardProps> = ({
           {/* Quick Bookmark */}
           <button
             onClick={handleBookmark}
-            title={bookmarked ? 'Saved' : 'Save Story'}
+            title={isSaved ? 'Saved' : 'Save Story'}
             className={`p-1.5 rounded hover:bg-[#F4F4F6] transition-colors ${
-              bookmarked ? 'text-[#6A1B9A]' : 'text-[#58606E] hover:text-[#6A1B9A]'
+              isSaved ? 'text-[#6A1B9A]' : 'text-[#58606E] hover:text-[#6A1B9A]'
             }`}
           >
-            <Bookmark className={`w-3.5 h-3.5 ${bookmarked ? 'fill-current' : ''}`} />
+            <Bookmark className={`w-3.5 h-3.5 ${isSaved ? 'fill-current' : ''}`} />
           </button>
         </div>
       </div>

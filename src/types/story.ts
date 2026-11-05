@@ -93,7 +93,7 @@ export interface Story {
   notification_status: NotificationStatus;
   display_order: number;
   language?: string; // e.g., 'en' | 'ml' | 'hi' | 'ta' | 'ar'
-  source_type?: 'manual' | 'indianapi_news' | 'market_wire';
+  source_type?: 'manual' | 'indianapi_news' | 'market_wire' | 'rss';
   source_url?: string;
   published_at?: string; // Specific published timestamp
   created_at: string;
@@ -176,6 +176,7 @@ export interface NewsItemRecord {
   source: string;
   pub_date: string;
   category?: string;
+  language?: 'malayalam' | 'english';
   is_saved_to_db?: boolean;
   created_at?: string;
 }

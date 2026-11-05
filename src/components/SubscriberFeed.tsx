@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Story, SECTIONS, CATEGORIES, Section, Category, TrendingStockItem, IpoItemRecord } from '../types/story';
 import { StoryCard } from './StoryCard';
 import {
@@ -8,6 +8,7 @@ import {
   Mail,
   ShieldCheck,
   ChevronRight,
+  ChevronLeft,
   Filter,
   Layers,
   Database,
@@ -48,6 +49,23 @@ export const SubscriberFeed: React.FC<SubscriberFeedProps> = ({
   const [emailInput, setEmailInput] = useState('');
   const [trendingTab, setTrendingTab] = useState<'all' | 'gainers' | 'losers'>('all');
   const [ipoFilter, setIpoFilter] = useState<'all' | 'active' | 'upcoming'>('all');
+  const [page, setPage] = useState(1);
+  const perPage = 8;
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedSection, selectedCategory]);
+
+  const totalPages = Math.max(1, Math.ceil(stories.length / perPage));
+  const validPage = Math.min(page, totalPages);
+  const startIndex = (validPage - 1) * perPage;
+  const paginatedStories = stories.slice(startIndex, startIndex + perPage);
+
+  const handlePageChange = (newPage: number) => {
+    const p = Math.max(1, Math.min(newPage, totalPages));
+    setPage(p);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
@@ -367,15 +385,65 @@ export const SubscriberFeed: React.FC<SubscriberFeedProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {stories.map((story, idx) => (
-                  <StoryCard
-                    key={story.id}
-                    story={story}
-                    onSelectStory={onSelectStory}
-                    featured={idx === 0 && selectedSection === 'All' && selectedCategory === 'All'}
-                  />
-                ))}
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {paginatedStories.map((story, idx) => (
+                    <StoryCard
+                      key={story.id}
+                      story={story}
+                      onSelectStory={onSelectStory}
+                      featured={idx === 0 && validPage === 1 && selectedSection === 'All' && selectedCategory === 'All'}
+                    />
+                  ))}
+                </div>
+
+                {stories.length > perPage && (
+                  <div
+                    id="section-subscriber-stories-pagination"
+                    className="p-4 bg-white rounded border border-[#E2E4E8] shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#58606E]"
+                  >
+                    <span>
+                      Showing <strong>{startIndex + 1}</strong>–<strong>{Math.min(startIndex + perPage, stories.length)}</strong> of <strong>{stories.length}</strong> stories
+                    </span>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handlePageChange(validPage - 1)}
+                        disabled={validPage <= 1}
+                        className="px-3 py-1.5 rounded border border-[#E2E4E8] bg-white text-[#1E2229] hover:bg-[#FAF7FC] hover:border-[#6A1B9A]/30 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-[#E2E4E8] transition-all flex items-center gap-1 font-semibold"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <span>Prev</span>
+                      </button>
+
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => handlePageChange(p)}
+                          className={`min-w-8 h-8 px-2 rounded text-xs font-bold transition-all ${
+                            p === validPage
+                              ? 'bg-[#6A1B9A] text-white shadow-xs'
+                              : 'bg-white border border-[#E2E4E8] text-[#58606E] hover:text-[#1E2229] hover:border-[#6A1B9A]/30'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() => handlePageChange(validPage + 1)}
+                        disabled={validPage >= totalPages}
+                        className="px-3 py-1.5 rounded border border-[#E2E4E8] bg-white text-[#1E2229] hover:bg-[#FAF7FC] hover:border-[#6A1B9A]/30 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-[#E2E4E8] transition-all flex items-center gap-1 font-semibold"
+                      >
+                        <span>Next</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

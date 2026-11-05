@@ -82,7 +82,7 @@ interface AdminPanelProps {
 const PRESET_IMAGES = [
   {
     name: 'Stock Exchange Floor',
-    url: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80',
+    url: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=560&h=320&q=80',
   },
   {
     name: 'Market Chart Bullish',
@@ -117,7 +117,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   marketTickers,
   onRefreshMarketTickers,
   onRefreshStories,
-  initialAdminTab = 'stories',
+  initialAdminTab = 'stocks',
 }) => {
   const [adminTab, setAdminTab] = useState<'stories' | 'markets' | 'stocks'>(initialAdminTab);
   // Mode: 'list' (dashboard) or 'editor' (form)
@@ -245,7 +245,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     category: 'Big Story',
     heading: '',
     lead_image_url:
-      'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80',
+      'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=560&h=320&q=80',
     short_description: '',
     full_story: '',
     canonical_url: '',
@@ -599,8 +599,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* Admin Studio Navigation Tabs: Stories Manager vs Live Markets */}
-      <div id="nav-admin-tabs" className="flex items-center gap-2 border-b border-[#E2E4E8] mb-6">
+      {/* Admin Studio Navigation Tabs: Market News Wire FIRST (Mobile scroll-safe) */}
+      <div id="nav-admin-tabs" className="flex items-center gap-1.5 sm:gap-2 border-b border-[#E2E4E8] mb-6 overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap max-w-full pb-0.5">
+        <button
+          id="btn-admin-tab-stocks"
+          type="button"
+          onClick={() => {
+            setAdminTab('stocks');
+            setMessage(null);
+          }}
+          className={`shrink-0 flex items-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-3 sm:px-4 text-xs font-bold border-b-2 transition-colors ${
+            adminTab === 'stocks'
+              ? 'border-[#6A1B9A] text-[#6A1B9A]'
+              : 'border-transparent text-[#58606E] hover:text-[#1E2229]'
+          }`}
+        >
+          <Newspaper className="w-4 h-4 text-[#6A1B9A]" />
+          <span>Market News Wire</span>
+        </button>
+
         <button
           id="btn-admin-tab-stories"
           type="button"
@@ -608,7 +625,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             setAdminTab('stories');
             setMessage(null);
           }}
-          className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-colors ${
+          className={`shrink-0 flex items-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-3 sm:px-4 text-xs font-bold border-b-2 transition-colors ${
             adminTab === 'stories'
               ? 'border-[#6A1B9A] text-[#6A1B9A]'
               : 'border-transparent text-[#58606E] hover:text-[#1E2229]'
@@ -628,7 +645,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             setAdminTab('markets');
             setMessage(null);
           }}
-          className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-colors ${
+          className={`shrink-0 flex items-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-3 sm:px-4 text-xs font-bold border-b-2 transition-colors ${
             adminTab === 'markets'
               ? 'border-[#6A1B9A] text-[#6A1B9A]'
               : 'border-transparent text-[#58606E] hover:text-[#1E2229]'
@@ -640,29 +657,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {marketTickers?.length || 0}
           </span>
         </button>
-
-        <button
-          id="btn-admin-tab-stocks"
-          type="button"
-          onClick={() => {
-            setAdminTab('stocks');
-            setMessage(null);
-          }}
-          className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-colors ${
-            adminTab === 'stocks'
-              ? 'border-[#6A1B9A] text-[#6A1B9A]'
-              : 'border-transparent text-[#58606E] hover:text-[#1E2229]'
-          }`}
-        >
-          <Globe className="w-4 h-4 text-[#6A1B9A]" />
-          <span>Market Data Studio</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30">
-            Free Engine
-          </span>
-        </button>
       </div>
 
-      {/* TAB 1: STORIES MANAGER */}
+      {/* TAB 1: MARKET NEWS WIRE (First Tab, Primary Malayalam News) */}
+      {adminTab === 'stocks' && (
+        <StockDataPanel
+          onNotify={(msg) => setMessage(msg)}
+          onRefreshAllData={onRefreshStories}
+          onEditStory={handleStartEdit}
+        />
+      )}
+
+      {/* TAB 2: STORIES MANAGER */}
       {adminTab === 'stories' && (
         <>
           {/* VIEW: DASHBOARD LIST */}
@@ -1551,16 +1557,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       </>
     )}
 
-    {/* TAB 3: INDIAN STOCK API STUDIO */}
-    {adminTab === 'stocks' && (
-      <StockDataPanel
-        onNotify={(msg) => setMessage(msg)}
-        onRefreshAllData={onRefreshStories}
-        onEditStory={handleStartEdit}
-      />
-    )}
-
-    {/* TAB 2: LIVE MARKETS TICKER MANAGER */}
+    {/* TAB 3: LIVE MARKETS TICKER MANAGER */}
     {adminTab === 'markets' && (
       <div className="space-y-6">
         {/* Action Header */}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Story,
   SECTIONS,
@@ -19,6 +19,8 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Search,
   ExternalLink,
   Calendar,
@@ -49,6 +51,10 @@ interface HedgeHomePageProps {
   ipos?: IpoItemRecord[];
   onSearchSymbol?: (symbol: string) => void;
   onRefreshLiveMarket?: () => void;
+  bookmarkedIds?: Set<string>;
+  onToggleBookmark?: (id: string) => void;
+  showOnlyBookmarks?: boolean;
+  onToggleShowBookmarks?: (show: boolean) => void;
 }
 
 type MarketDeskTab = 'indices' | 'movers' | 'ipos';
@@ -67,10 +73,14 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
   ipos = [],
   onSearchSymbol,
   onRefreshLiveMarket,
+  bookmarkedIds,
+  onToggleBookmark,
+  showOnlyBookmarks = false,
+  onToggleShowBookmarks,
 }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(() => {
+  const [localBookmarkedIds, setLocalBookmarkedIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem('hedge_saved_bookmarks');
       return raw ? new Set(JSON.parse(raw)) : new Set();
@@ -79,24 +89,89 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
     }
   });
 
+  const effectiveBookmarkedIds = bookmarkedIds || localBookmarkedIds;
+
   // Market Desk State
   const [deskExpanded, setDeskExpanded] = useState<boolean>(true);
   const [activeMarketTab, setActiveMarketTab] = useState<MarketDeskTab>('movers');
   const [moversFilter, setMoversFilter] = useState<MoversFilter>('all');
   const [ipoFilter, setIpoFilter] = useState<IpoFilter>('all');
 
-  // FIND STORIES Filter States
-  const [filterExpanded, setFilterExpanded] = useState<boolean>(true);
+  // Track mobile screen size for responsive DOM layout & conditional IDs
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 1024;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // FIND STORIES Filter States - minimised by default on mobile (< 1024px), open on desktop
+  const [filterExpanded, setFilterExpanded] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 1024;
+    }
+    return false;
+  });
   const [storySearchQuery, setStorySearchQuery] = useState<string>('');
   const [selectedCategoryTag, setSelectedCategoryTag] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  // Stories Listing Pagination
+  const [storyPage, setStoryPage] = useState<number>(1);
+  const [storiesPerPage, setStoriesPerPage] = useState<number>(8);
+
+  // Top Movers carousel horizontal scroll ref and control handlers
+  const moversScrollRef = useRef<HTMLDivElement>(null);
+  const scrollMovers = (direction: 'left' | 'right') => {
+    if (moversScrollRef.current) {
+      const scrollAmount = direction === 'left' ? -220 : 220;
+      moversScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  // Exact Hedge Ohari (hedgeohari.com) Category / Tags Taxonomy
+  const HEDGE_OHARI_CATEGORIES_TAGS = [
+    'Financial Planning',
+    'Big Story',
+    'Results Calendar',
+    'Event Calendar',
+    'Class Room',
+    'Political Theatre',
+    'Market Trends',
+    'Mutual Fund',
+    'Stock Recommendations',
+    'Portfolio',
+    'Sector Scan',
+    'Economy Watch',
+    'Personal Finance',
+    'Insurance',
+    'Tax Planning',
+    'Commodity',
+    'Currency',
+    'Crypto / FinTech',
+  ];
 
   const availableCategories = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(HEDGE_OHARI_CATEGORIES_TAGS);
     stories.forEach((s) => {
       if (s.category) set.add(s.category);
+      if (s.keywords) {
+        s.keywords.split(',').forEach((k) => {
+          const trimmed = k.trim();
+          if (trimmed.length > 2 && trimmed.length < 35) {
+            set.add(trimmed);
+          }
+        });
+      }
     });
-    return Array.from(set);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [stories]);
 
   const availableMonths = useMemo(() => {
@@ -117,6 +192,11 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
   const displayedStories = useMemo(() => {
     return stories.filter((story) => {
+      // 0. Bookmarks filter
+      if (showOnlyBookmarks && !effectiveBookmarkedIds.has(story.id)) {
+        return false;
+      }
+
       // 1. Text search
       if (storySearchQuery.trim()) {
         const q = storySearchQuery.toLowerCase();
@@ -130,9 +210,15 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
         }
       }
 
-      // 2. Category tag filter
-      if (selectedCategoryTag !== 'all' && story.category !== selectedCategoryTag) {
-        return false;
+      // 2. Category / Tags filter (Exact match or keyword/heading inclusion)
+      if (selectedCategoryTag !== 'all') {
+        const catLower = selectedCategoryTag.toLowerCase();
+        const matchCat = (story.category || '').toLowerCase() === catLower;
+        const matchKw = (story.keywords || '').toLowerCase().includes(catLower);
+        const matchHead = story.heading.toLowerCase().includes(catLower);
+        if (!matchCat && !matchKw && !matchHead) {
+          return false;
+        }
       }
 
       // 3. Month filter
@@ -146,19 +232,43 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
       return true;
     });
-  }, [stories, storySearchQuery, selectedCategoryTag, selectedMonth]);
+  }, [stories, storySearchQuery, selectedCategoryTag, selectedMonth, showOnlyBookmarks, effectiveBookmarkedIds]);
+
+  const totalStoryPages = Math.max(1, Math.ceil(displayedStories.length / storiesPerPage));
+  const validStoryPage = Math.min(storyPage, totalStoryPages);
+  const storyStartIndex = (validStoryPage - 1) * storiesPerPage;
+  const paginatedStories = useMemo(() => {
+    return displayedStories.slice(storyStartIndex, storyStartIndex + storiesPerPage);
+  }, [displayedStories, storyStartIndex, storiesPerPage]);
+
+  const handleStoryPageChange = (newPage: number) => {
+    const p = Math.max(1, Math.min(newPage, totalStoryPages));
+    setStoryPage(p);
+    const target = document.getElementById('section-stories-grid') || document.getElementById('section-center-feed');
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  useEffect(() => {
+    setStoryPage(1);
+  }, [storySearchQuery, selectedCategoryTag, selectedMonth, selectedSection, showOnlyBookmarks]);
 
   const toggleBookmark = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setBookmarkedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      try {
-        localStorage.setItem('hedge_saved_bookmarks', JSON.stringify(Array.from(next)));
-      } catch {}
-      return next;
-    });
+    if (onToggleBookmark) {
+      onToggleBookmark(id);
+    } else {
+      setLocalBookmarkedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        try {
+          localStorage.setItem('hedge_saved_bookmarks', JSON.stringify(Array.from(next)));
+        } catch {}
+        return next;
+      });
+    }
   };
 
   const handleShare = (story: Story, e: React.MouseEvent) => {
@@ -248,187 +358,223 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
     return html.replace(/<[^>]+>/g, '').trim();
   };
 
+  // Reusable FIND STORIES Box with responsive ID attribution
+  const renderFindStoriesBox = (isMobile = false) => {
+    const isPrimary = isMobile === isMobileScreen;
+    const sectionId = isPrimary ? 'section-find-stories' : (isMobile ? 'section-find-stories-mobile' : 'section-find-stories-desktop');
+    const toggleBtnId = isPrimary ? 'btn-toggle-find-stories' : (isMobile ? 'btn-toggle-find-stories-mobile' : 'btn-toggle-find-stories-desktop');
+    const bodyId = isPrimary ? 'panel-find-stories-body' : (isMobile ? 'panel-find-stories-body-mobile' : 'panel-find-stories-body-desktop');
+    const inputSearchId = isPrimary ? 'input-find-stories-search' : (isMobile ? 'input-find-stories-search-mobile' : 'input-find-stories-search-desktop');
+    const selectSectionId = isPrimary ? 'select-find-stories-section' : (isMobile ? 'select-find-stories-section-mobile' : 'select-find-stories-section-desktop');
+    const selectCategoryId = isPrimary ? 'select-find-stories-category' : (isMobile ? 'select-find-stories-category-mobile' : 'select-find-stories-category-desktop');
+    const selectMonthId = isPrimary ? 'select-find-stories-month' : (isMobile ? 'select-find-stories-month-mobile' : 'select-find-stories-month-desktop');
+    const resetBtnId = isPrimary ? 'btn-find-stories-reset' : (isMobile ? 'btn-find-stories-reset-mobile' : 'btn-find-stories-reset-desktop');
+
+    return (
+      <div id={sectionId} className="bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden">
+        <button
+          id={toggleBtnId}
+          type="button"
+          onClick={() => setFilterExpanded(!filterExpanded)}
+          className="w-full p-3.5 bg-[#FAF7FC] hover:bg-[#F3E5F5]/60 transition-colors border-b border-[#E6E6E6] text-left flex items-start justify-between gap-2 cursor-pointer"
+        >
+          <div>
+            <div className="flex items-center gap-1.5 mb-1">
+              <Search className="w-3.5 h-3.5 text-[#903E97]" />
+              <h5 className="font-['Open_Sans'] font-extrabold text-xs text-[#262B2E] uppercase tracking-wider">
+                FIND STORIES
+              </h5>
+              {(storySearchQuery || selectedCategoryTag !== 'all' || selectedMonth !== 'all') && (
+                <span className="w-2 h-2 rounded-full bg-[#903E97]" title="Active filter applied" />
+              )}
+            </div>
+            <p className="text-[10px] text-[#676A6C] leading-normal">
+              Filter stories by published month, sections, category &amp; tags.
+            </p>
+          </div>
+          <div className="text-[#676A6C] p-0.5">
+            {filterExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </div>
+        </button>
+
+        {filterExpanded && (
+          <div id={bodyId} className="p-3.5 space-y-3 bg-white text-xs">
+            {/* Headline / Keyword Search */}
+            <div>
+              <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
+                Search Headline
+              </label>
+              <div className="relative">
+                <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#878787]" />
+                <input
+                  id={inputSearchId}
+                  type="text"
+                  value={storySearchQuery}
+                  onChange={(e) => {
+                    setStorySearchQuery(e.target.value);
+                    setStoryPage(1);
+                  }}
+                  placeholder="Search keywords..."
+                  className="w-full pl-7 pr-6 py-1.5 rounded border border-[#E6E6E6] text-xs text-[#262B2E] focus:border-[#903E97] outline-none"
+                />
+                {storySearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStorySearchQuery('');
+                      setStoryPage(1);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[#878787] hover:text-[#262B2E] text-sm"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Section Filter */}
+            <div>
+              <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
+                Section
+              </label>
+              <select
+                id={selectSectionId}
+                value={selectedSection}
+                onChange={(e) => {
+                  onSelectSection(e.target.value);
+                  setStoryPage(1);
+                }}
+                className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
+              >
+                {navSections.map((sec) => (
+                  <option key={sec.value} value={sec.value}>
+                    {sec.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Category / Tags Filter (Matching hedgeohari.com) */}
+            {availableCategories.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider">
+                    Category / Tags
+                  </label>
+                  {selectedCategoryTag !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategoryTag('all');
+                        setStoryPage(1);
+                      }}
+                      className="text-[10px] text-[#903E97] hover:underline"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+                <select
+                  id={selectCategoryId}
+                  value={selectedCategoryTag}
+                  onChange={(e) => {
+                    setSelectedCategoryTag(e.target.value);
+                    setStoryPage(1);
+                  }}
+                  className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
+                >
+                  <option value="all">All Categories &amp; Tags ({availableCategories.length})</option>
+                  {availableCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Quick Tag Chips */}
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {['Mutual Fund', 'Stock Recommendations', 'Financial Planning', 'Tax Planning', 'Big Story'].map((tag) => {
+                    const isTagActive = selectedCategoryTag.toLowerCase() === tag.toLowerCase();
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategoryTag(isTagActive ? 'all' : tag);
+                          setStoryPage(1);
+                        }}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                          isTagActive
+                            ? 'bg-[#903E97] text-white shadow-2xs'
+                            : 'bg-[#FAF7FC] text-[#676A6C] hover:text-[#903E97] hover:bg-[#F3E5F5]/50 border border-[#E6E6E6]'
+                        }`}
+                      >
+                        #{tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Publishing Month Filter */}
+            {availableMonths.length > 0 && (
+              <div>
+                <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
+                  Publishing Month
+                </label>
+                <select
+                  id={selectMonthId}
+                  value={selectedMonth}
+                  onChange={(e) => {
+                    setSelectedMonth(e.target.value);
+                    setStoryPage(1);
+                  }}
+                  className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
+                >
+                  <option value="all">All Months</option>
+                  {availableMonths.map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Reset Filters */}
+            {(storySearchQuery || selectedCategoryTag !== 'all' || selectedMonth !== 'all' || selectedSection !== 'All') && (
+              <button
+                id={resetBtnId}
+                type="button"
+                onClick={() => {
+                  setStorySearchQuery('');
+                  setSelectedCategoryTag('all');
+                  setSelectedMonth('all');
+                  onSelectSection('All');
+                  setStoryPage(1);
+                }}
+                className="w-full py-1.5 text-[11px] font-bold text-[#903E97] bg-[#FAF7FC] hover:bg-[#F3E5F5] rounded border border-[#903E97]/25 transition-colors text-center cursor-pointer"
+              >
+                Reset All Filters
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="bg-[#F2F2F2] min-h-screen py-4 sm:py-6">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* ======================================================== */}
-          {/* 1. LEFT SIDEBAR: FIND STORIES & Categories Menu           */}
+          {/* 1. LEFT SIDEBAR: FIND STORIES & Categories Menu (Desktop) */}
           {/* ======================================================== */}
-          <aside id="section-left-sidebar" className="w-full lg:w-56 xl:w-64 2xl:w-72 shrink-0 space-y-4">
-            {/* FIND STORIES Box (Exact Hedge Ohari Pattern) */}
-            <div id="section-find-stories" className="bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden">
-              <button
-                id="btn-toggle-find-stories"
-                type="button"
-                onClick={() => setFilterExpanded(!filterExpanded)}
-                className="w-full p-3.5 bg-[#FAF7FC] hover:bg-[#F3E5F5]/60 transition-colors border-b border-[#E6E6E6] text-left flex items-start justify-between gap-2 cursor-pointer"
-              >
-                <div>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Search className="w-3.5 h-3.5 text-[#903E97]" />
-                    <h5 className="font-['Open_Sans'] font-extrabold text-xs text-[#262B2E] uppercase tracking-wider">
-                      FIND STORIES
-                    </h5>
-                    {(storySearchQuery || selectedCategoryTag !== 'all' || selectedMonth !== 'all') && (
-                      <span className="w-2 h-2 rounded-full bg-[#903E97]" title="Active filter applied" />
-                    )}
-                  </div>
-                  <p className="text-[10px] text-[#676A6C] leading-normal">
-                    You can find stories by published month, sections and categories.
-                  </p>
-                </div>
-                <div className="text-[#676A6C] p-0.5">
-                  {filterExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </div>
-              </button>
-
-              {filterExpanded && (
-                <div id="panel-find-stories-body" className="p-3.5 space-y-3 bg-white text-xs">
-                  {/* Headline / Keyword Search */}
-                  <div>
-                    <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
-                      Search Headline
-                    </label>
-                    <div className="relative">
-                      <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#878787]" />
-                      <input
-                        id="input-find-stories-search"
-                        type="text"
-                        value={storySearchQuery}
-                        onChange={(e) => setStorySearchQuery(e.target.value)}
-                        placeholder="Search keywords..."
-                        className="w-full pl-7 pr-6 py-1.5 rounded border border-[#E6E6E6] text-xs text-[#262B2E] focus:border-[#903E97] outline-none"
-                      />
-                      {storySearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setStorySearchQuery('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[#878787] hover:text-[#262B2E] text-sm"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Section Filter */}
-                  <div>
-                    <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
-                      Section
-                    </label>
-                    <select
-                      id="select-find-stories-section"
-                      value={selectedSection}
-                      onChange={(e) => onSelectSection(e.target.value)}
-                      className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
-                    >
-                      {navSections.map((sec) => (
-                        <option key={sec.value} value={sec.value}>
-                          {sec.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Category / Tags Filter */}
-                  {availableCategories.length > 0 && (
-                    <div>
-                      <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
-                        Category / Tags
-                      </label>
-                      <select
-                        id="select-find-stories-category"
-                        value={selectedCategoryTag}
-                        onChange={(e) => setSelectedCategoryTag(e.target.value)}
-                        className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
-                      >
-                        <option value="all">All Categories</option>
-                        {availableCategories.map((cat) => (
-                          <option key={cat} value={cat}>
-                            {cat}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Publishing Month Filter */}
-                  {availableMonths.length > 0 && (
-                    <div>
-                      <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
-                        Publishing Month
-                      </label>
-                      <select
-                        id="select-find-stories-month"
-                        value={selectedMonth}
-                        onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
-                      >
-                        <option value="all">All Months</option>
-                        {availableMonths.map(([key, label]) => (
-                          <option key={key} value={key}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Reset Filters */}
-                  {(storySearchQuery || selectedCategoryTag !== 'all' || selectedMonth !== 'all' || selectedSection !== 'All') && (
-                    <button
-                      id="btn-find-stories-reset"
-                      type="button"
-                      onClick={() => {
-                        setStorySearchQuery('');
-                        setSelectedCategoryTag('all');
-                        setSelectedMonth('all');
-                        onSelectSection('All');
-                      }}
-                      className="w-full py-1.5 text-[11px] font-bold text-[#903E97] bg-[#FAF7FC] hover:bg-[#F3E5F5] rounded border border-[#903E97]/25 transition-colors text-center cursor-pointer"
-                    >
-                      Reset All Filters
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Mobile / Tablet Horizontal Category Scroller */}
-            <div id="section-mobile-categories" className="lg:hidden bg-white rounded border border-[#E6E6E6] p-2 shadow-2xs mb-2">
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-                {navSections.map((sec) => {
-                  const isActive = selectedSection === sec.value;
-                  return (
-                    <button
-                      id={`btn-mobile-category-${sec.value.toLowerCase().replace(/\s+/g, '-')}`}
-                      key={sec.value}
-                      type="button"
-                      onClick={() => {
-                        onSelectSection(sec.value);
-                        if (sec.value === 'IPO Watch') {
-                          setActiveMarketTab('ipos');
-                          setDeskExpanded(true);
-                        }
-                      }}
-                      className={`px-3 py-1.5 rounded text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
-                        isActive
-                          ? 'bg-[#903E97] text-white shadow-xs'
-                          : 'bg-[#FAF7FC] text-[#262B2E] hover:bg-[#F2F2F2]'
-                      }`}
-                    >
-                      {sec.value === 'IPO Watch' && <Rocket className="w-3.5 h-3.5" />}
-                      {sec.value === 'Market News' && <Activity className="w-3.5 h-3.5" />}
-                      <span>{sec.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Desktop Vertical Menu */}
-            <div id="section-desktop-categories" className="hidden lg:block bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden sticky top-20">
+          <aside id="section-left-sidebar" className="hidden lg:block w-full lg:w-56 xl:w-64 2xl:w-72 shrink-0 space-y-4">
+            {/* Desktop Vertical Menu (Categories First as requested) */}
+            <div id="section-desktop-categories" className="bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden">
               <div className="p-3.5 bg-[#FAF7FC] border-b border-[#E6E6E6] flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[#903E97]">
                   Categories
@@ -445,6 +591,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                         type="button"
                         onClick={() => {
                           onSelectSection(sec.value);
+                          setStoryPage(1);
                           if (sec.value === 'IPO Watch') {
                             setActiveMarketTab('ipos');
                             setDeskExpanded(true);
@@ -467,24 +614,27 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   );
                 })}
               </ul>
+            </div>
 
-              {/* Journal Subscription Promo */}
-              <div id="section-journal-promo-left" className="p-4 bg-[#FAF7FC] border-t border-[#E6E6E6] text-center">
-                <span className="text-[11px] font-bold text-[#262B2E] block mb-1">
-                  Hedge Ohari Print &amp; Digital
-                </span>
-                <p className="text-[10px] text-[#676A6C] mb-3 leading-normal">
-                  Malayalam Finance Journal for smart investors.
-                </p>
-                <button
-                  id="btn-subscribe-sidebar-left"
-                  type="button"
-                  onClick={onOpenSubscribe}
-                  className="w-full py-1.5 rounded bg-[#903E97] hover:bg-[#A045A8] text-white text-[11px] font-bold uppercase tracking-wider transition-colors"
-                >
-                  Subscribe Now
-                </button>
-              </div>
+            {/* Desktop FIND STORIES Box (Second as requested) */}
+            {renderFindStoriesBox(false)}
+
+            {/* Journal Subscription Promo */}
+            <div id="section-journal-promo-left" className="p-4 bg-white rounded border border-[#E6E6E6] text-center shadow-2xs">
+              <span className="text-[11px] font-bold text-[#262B2E] block mb-1">
+                Hedge Ohari Print &amp; Digital
+              </span>
+              <p className="text-[10px] text-[#676A6C] mb-3 leading-normal">
+                Malayalam Finance Journal for smart investors.
+              </p>
+              <button
+                id="btn-subscribe-sidebar-left"
+                type="button"
+                onClick={onOpenSubscribe}
+                className="w-full py-1.5 rounded bg-[#903E97] hover:bg-[#A045A8] text-white text-[11px] font-bold uppercase tracking-wider transition-colors shadow-2xs"
+              >
+                Subscribe
+              </button>
             </div>
           </aside>
 
@@ -597,13 +747,13 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   {activeMarketTab === 'movers' && (
                     <div id="panel-top-movers" className="space-y-3.5">
                       {/* Filter sub-strip */}
-                      <div id="filters-top-movers" className="flex items-center justify-between pb-2.5 border-b border-[#F2F2F2]">
-                        <div className="flex items-center gap-1.5">
+                      <div id="filters-top-movers" className="flex items-center justify-between pb-2.5 border-b border-[#F2F2F2] gap-2">
+                        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                           <button
                             id="btn-movers-all"
                             type="button"
                             onClick={() => setMoversFilter('all')}
-                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
+                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors shrink-0 ${
                               moversFilter === 'all'
                                 ? 'bg-[#262B2E] text-white'
                                 : 'bg-[#F2F2F2] text-[#676A6C] hover:text-[#262B2E]'
@@ -615,7 +765,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                             id="btn-movers-gainers"
                             type="button"
                             onClick={() => setMoversFilter('gainers')}
-                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 ${
+                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 shrink-0 ${
                               moversFilter === 'gainers'
                                 ? 'bg-[#0E8A54] text-white'
                                 : 'bg-[#E8F5EE] text-[#0E8A54] hover:bg-[#d5eee0]'
@@ -628,7 +778,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                             id="btn-movers-losers"
                             type="button"
                             onClick={() => setMoversFilter('losers')}
-                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 ${
+                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 shrink-0 ${
                               moversFilter === 'losers'
                                 ? 'bg-[#D32F2F] text-white'
                                 : 'bg-[#FDECEC] text-[#D32F2F] hover:bg-[#fad4d4]'
@@ -638,13 +788,40 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                             Losers
                           </button>
                         </div>
+
+                        {/* Mobile Next & Previous Carousel Navigation Controls */}
+                        <div className="flex items-center gap-1 sm:hidden shrink-0">
+                          <button
+                            id="btn-movers-prev"
+                            type="button"
+                            onClick={() => scrollMovers('left')}
+                            aria-label="Previous top movers"
+                            className="p-1 rounded border border-[#E6E6E6] bg-white text-[#262B2E] hover:bg-[#FAF7FC] hover:border-[#903E97]/40 active:scale-95 transition-all shadow-2xs"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            id="btn-movers-next"
+                            type="button"
+                            onClick={() => scrollMovers('right')}
+                            aria-label="Next top movers"
+                            className="p-1 rounded border border-[#E6E6E6] bg-white text-[#262B2E] hover:bg-[#FAF7FC] hover:border-[#903E97]/40 active:scale-95 transition-all shadow-2xs"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
                         <span className="text-[10px] text-[#878787] hidden sm:inline">
                           Prices update in real time
                         </span>
                       </div>
 
-                      {/* Stock Cards Grid */}
-                      <div id="grid-top-movers" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-4 gap-3">
+                      {/* Stock Cards Grid (Mobile swipeable carousel with snap & desktop responsive grid) */}
+                      <div
+                        id="grid-top-movers"
+                        ref={moversScrollRef}
+                        className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar sm:grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-4 gap-2.5 sm:gap-3 pb-1 sm:pb-0"
+                      >
                         {filteredMovers.slice(0, 8).map((stock) => {
                           const isGainer = stock.trend_type === 'gainer';
                           const symbol = stock.ticker_id || stock.company_name;
@@ -656,19 +833,26 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                             <div
                               key={stock.id}
                               id={`card-mover-${stock.id}`}
-                              className="p-3 rounded border border-[#E6E6E6] bg-[#FAF7FC]/50 hover:bg-white hover:border-[#903E97]/40 hover:shadow-2xs transition-all duration-150 flex flex-col justify-between"
+                              className="w-[145px] sm:w-auto shrink-0 snap-start sm:shrink p-2.5 sm:p-3 rounded-lg border border-[#E6E6E6] bg-gradient-to-b from-[#FAF7FC]/80 via-white to-white hover:bg-white hover:border-[#903E97]/40 hover:shadow-2xs transition-all duration-150 flex flex-col justify-between relative group overflow-hidden"
                             >
-                              <div className="flex items-start justify-between gap-1 mb-1.5">
-                                <div>
-                                  <span className="font-extrabold text-xs text-[#262B2E] tracking-tight block">
+                              {/* Top accent line */}
+                              <div
+                                className={`absolute top-0 left-0 right-0 h-0.5 ${
+                                  isGainer ? 'bg-[#0E8A54]' : 'bg-[#D32F2F]'
+                                }`}
+                              />
+
+                              <div className="flex items-start justify-between gap-1 mb-1">
+                                <div className="min-w-0 pr-1">
+                                  <span className="font-extrabold text-[11px] sm:text-xs text-[#262B2E] tracking-tight block truncate">
                                     {symbol}
                                   </span>
-                                  <span className="text-[10px] text-[#676A6C] line-clamp-1">
+                                  <span className="text-[9px] sm:text-[10px] text-[#676A6C] block truncate">
                                     {stock.company_name}
                                   </span>
                                 </div>
                                 <span
-                                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold tabular-nums shrink-0 ${
+                                  className={`inline-flex items-center gap-0.5 px-1 sm:px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-bold tabular-nums shrink-0 ${
                                     isGainer
                                       ? 'bg-[#E8F5EE] text-[#0E8A54]'
                                       : 'bg-[#FDECEC] text-[#D32F2F]'
@@ -683,8 +867,8 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                                 </span>
                               </div>
 
-                              <div className="pt-2 border-t border-[#F2F2F2] flex items-center justify-between mt-auto">
-                                <span className="tabular-nums font-bold text-xs text-[#262B2E]">
+                              <div className="pt-1.5 border-t border-[#F2F2F2] flex items-center justify-between mt-auto">
+                                <span className="tabular-nums font-bold text-[11px] sm:text-xs text-[#262B2E]">
                                   {priceFormatted}
                                 </span>
 
@@ -695,7 +879,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                                     title={`Filter news for ${symbol}`}
                                     className="p-1 rounded text-[#878787] hover:text-[#903E97] hover:bg-[#FAF7FC] transition-colors"
                                   >
-                                    <Search className="w-3 h-3" />
+                                    <Search className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                                   </button>
                                 )}
                               </div>
@@ -876,6 +1060,47 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
             </section>
 
             {/* ======================================================== */}
+            {/* MOBILE ONLY (lg:hidden): Find Stories (minimised) + Categories */}
+            {/* ======================================================== */}
+            <div className="lg:hidden space-y-4">
+              {/* Find Stories Box - Minimised by default on mobile */}
+              {renderFindStoriesBox(true)}
+
+              {/* Mobile / Tablet Horizontal Category Scroller */}
+              <div id="section-mobile-categories" className="bg-white rounded border border-[#E6E6E6] p-2 shadow-2xs">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                  {navSections.map((sec) => {
+                    const isActive = selectedSection === sec.value;
+                    return (
+                      <button
+                        id={`btn-mobile-category-${sec.value.toLowerCase().replace(/\s+/g, '-')}`}
+                        key={sec.value}
+                        type="button"
+                        onClick={() => {
+                          onSelectSection(sec.value);
+                          setStoryPage(1);
+                          if (sec.value === 'IPO Watch') {
+                            setActiveMarketTab('ipos');
+                            setDeskExpanded(true);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
+                          isActive
+                            ? 'bg-[#903E97] text-white shadow-xs'
+                            : 'bg-[#FAF7FC] text-[#262B2E] hover:bg-[#F2F2F2]'
+                        }`}
+                      >
+                        {sec.value === 'IPO Watch' && <Rocket className="w-3.5 h-3.5" />}
+                        {sec.value === 'Market News' && <Activity className="w-3.5 h-3.5" />}
+                        <span>{sec.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* ======================================================== */}
             {/* B. MAIN EDITORIAL FEED GRID                               */}
             {/* ======================================================== */}
             {/* Active FIND STORIES Filter Tag Banner */}
@@ -920,6 +1145,28 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
               </div>
             )}
 
+            {/* Active Bookmarks Filter Banner */}
+            {showOnlyBookmarks && (
+              <div id="section-bookmarks-banner" className="flex items-center justify-between p-2.5 px-3 bg-[#FAF7FC] border border-[#903E97]/30 rounded text-xs text-[#262B2E] mb-3">
+                <div className="flex items-center gap-2">
+                  <Bookmark className="w-4 h-4 fill-current text-[#903E97]" />
+                  <span className="font-bold text-[#903E97]">
+                    Showing Saved Bookmarks ({displayedStories.length})
+                  </span>
+                </div>
+                {onToggleShowBookmarks && (
+                  <button
+                    id="btn-clear-bookmarks-banner"
+                    type="button"
+                    onClick={() => onToggleShowBookmarks(false)}
+                    className="text-[11px] font-bold text-[#903E97] hover:underline cursor-pointer"
+                  >
+                    View All Stories
+                  </button>
+                )}
+              </div>
+            )}
+
             {loading ? (
               <div id="section-stories-loading" className="space-y-4">
                 {[1, 2, 3].map((i) => (
@@ -932,6 +1179,24 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                     <div className="h-4 bg-[#E6E6E6] rounded w-full" />
                   </div>
                 ))}
+              </div>
+            ) : showOnlyBookmarks && displayedStories.length === 0 ? (
+              <div id="section-stories-empty-bookmarks" className="bg-white rounded border border-[#E6E6E6] p-12 text-center text-[#676A6C] space-y-3">
+                <div className="w-12 h-12 mx-auto rounded-full bg-[#FAF7FC] flex items-center justify-center text-[#903E97]">
+                  <Bookmark className="w-6 h-6 text-[#903E97]/60" />
+                </div>
+                <p className="text-sm font-bold text-[#262B2E]">No saved bookmarks yet</p>
+                <p className="text-xs text-[#676A6C]">Click the bookmark icon on any story card to save it for reading later.</p>
+                {onToggleShowBookmarks && (
+                  <button
+                    id="btn-explore-after-empty-bookmarks"
+                    type="button"
+                    onClick={() => onToggleShowBookmarks(false)}
+                    className="px-4 py-2 rounded bg-[#903E97] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    Explore Stories
+                  </button>
+                )}
               </div>
             ) : stories.length === 0 ? (
               <div id="section-stories-empty-category" className="bg-white rounded border border-[#E6E6E6] p-12 text-center text-[#676A6C] space-y-3">
@@ -962,10 +1227,11 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 </button>
               </div>
             ) : (
-              <div id="section-stories-grid" className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6">
-                {displayedStories.map((story, index) => {
-                  const isHero = index === 0;
-                  const isSaved = bookmarkedIds.has(story.id);
+              <>
+                <div id="section-stories-grid" className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6">
+                {paginatedStories.map((story, index) => {
+                  const isHero = index === 0 && validStoryPage === 1;
+                  const isSaved = effectiveBookmarkedIds.has(story.id);
                   const isCopied = copiedId === story.id;
                   const timeAgo = formatTimeAgo(story.published_at || story.created_at);
                   const excerpt = getExcerpt(story.short_description || story.full_story);
@@ -1077,7 +1343,107 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   );
                 })}
               </div>
-            )}
+
+              {/* Stories Pagination Bar */}
+              {displayedStories.length > storiesPerPage && (
+                <div
+                  id="section-stories-pagination"
+                  className="mt-6 p-4 bg-white rounded border border-[#E6E6E6] shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#676A6C]"
+                >
+                  <div className="flex items-center gap-2">
+                    <span>
+                      Showing <strong>{storyStartIndex + 1}</strong>–<strong>{Math.min(storyStartIndex + storiesPerPage, displayedStories.length)}</strong> of <strong>{displayedStories.length}</strong> stories
+                    </span>
+                    <span className="text-[#E6E6E6] hidden sm:inline">|</span>
+                    <div className="flex items-center gap-1.5 hidden sm:flex">
+                      <span>Per page:</span>
+                      <select
+                        value={storiesPerPage}
+                        onChange={(e) => {
+                          setStoriesPerPage(Number(e.target.value));
+                          setStoryPage(1);
+                        }}
+                        className="px-2 py-1 rounded border border-[#E6E6E6] bg-white text-xs font-semibold text-[#262B2E] focus:outline-none focus:ring-1 focus:ring-[#903E97]"
+                      >
+                        <option value={6}>6</option>
+                        <option value={8}>8</option>
+                        <option value={12}>12</option>
+                        <option value={20}>20</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Page Controls */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      id="btn-story-prev-page"
+                      onClick={() => handleStoryPageChange(validStoryPage - 1)}
+                      disabled={validStoryPage <= 1}
+                      className="px-3 py-1.5 rounded border border-[#E6E6E6] bg-white text-[#262B2E] hover:bg-[#FAF7FC] hover:border-[#903E97]/40 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-[#E6E6E6] transition-all flex items-center gap-1 font-semibold"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Prev</span>
+                    </button>
+
+                    {/* Page numbers */}
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalStoryPages }, (_, i) => i + 1)
+                        .filter((p) => {
+                          if (totalStoryPages <= 7) return true;
+                          if (p === 1 || p === totalStoryPages) return true;
+                          return Math.abs(p - validStoryPage) <= 1;
+                        })
+                        .reduce((acc, p, i, arr) => {
+                          if (i > 0 && p - arr[i - 1] > 1) {
+                            acc.push('...');
+                          }
+                          acc.push(p);
+                          return acc;
+                        }, [])
+                        .map((item, idx) => {
+                          if (item === '...') {
+                            return (
+                              <span key={`story-ellipsis-${idx}`} className="px-2 text-xs text-[#878787]">
+                                ...
+                              </span>
+                            );
+                          }
+                          const p = item;
+                          const isActive = p === validStoryPage;
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              id={`btn-story-page-${p}`}
+                              onClick={() => handleStoryPageChange(p)}
+                              className={`min-w-8 h-8 px-2 rounded text-xs font-bold transition-all ${
+                                isActive
+                                  ? 'bg-[#903E97] text-white shadow-xs'
+                                  : 'bg-white border border-[#E6E6E6] text-[#262B2E] hover:bg-[#FAF7FC] hover:border-[#903E97]/40'
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          );
+                        })}
+                    </div>
+
+                    <button
+                      type="button"
+                      id="btn-story-next-page"
+                      onClick={() => handleStoryPageChange(validStoryPage + 1)}
+                      disabled={validStoryPage >= totalStoryPages}
+                      className="px-3 py-1.5 rounded border border-[#E6E6E6] bg-white text-[#262B2E] hover:bg-[#FAF7FC] hover:border-[#903E97]/40 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-[#E6E6E6] transition-all flex items-center gap-1 font-semibold"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
           </main>
 
           {/* ======================================================== */}
@@ -1085,7 +1451,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
           {/* ======================================================== */}
           <aside id="section-right-sidebar" className="w-full lg:w-72 xl:w-80 2xl:w-96 shrink-0 space-y-4">
             {/* Journal Promo Card */}
-            <div id="section-journal-subscription-right" className="bg-white rounded border border-[#E6E6E6] p-5 shadow-2xs text-center space-y-3 sticky top-20">
+            <div id="section-journal-subscription-right" className="bg-white rounded border border-[#E6E6E6] p-5 shadow-2xs text-center space-y-3">
               <div className="w-12 h-12 mx-auto rounded-full bg-[#FAF7FC] border border-[#903E97]/20 flex items-center justify-center text-[#903E97] font-extrabold text-sm">
                 ഓഹരി
               </div>

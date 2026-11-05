@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.0] - 2026-11-05
+
+### Added
+- **Authentic News Article Lead Image Scraper & OpenGraph Parser**:
+  - Replaced fallback static Unsplash stock imagery with real publisher lead images parsed directly from wire RSS feeds.
+  - Multi-tier feed extractor parses `enclosure`, `media:content`, `media:thumbnail`, and embedded HTML `<img>` tags across Malayalam sources (Dhanam Online, GoodReturns Malayalam, TwentyFour News) and English sources (LiveMint, Economic Times, Business Standard).
+  - Built direct OpenGraph/Twitter card lead photo scraper (`fetchArticleOgImage`) to extract original lead images from publisher article pages when feeds lack media enclosures.
+- **Stories Feed & Wire News Pagination**:
+  - Added `#section-stories-pagination` on public home page and subscriber feed with smooth page navigation, previous/next controls, and active page pill indicators.
+  - Added full pagination to `#section-news-container` in Admin Panel Market News Wire with dispatches count and per-page selector.
+- **Hedge Ohari Taxonomy in "FIND STORIES"**:
+  - Integrated complete 18-item Category/Tags taxonomy matching `hedgeohari.com` (Financial Planning, Big Story, Results Calendar, Event Calendar, Class Room, Political Theatre, Market Trends, Mutual Fund, Stock Recommendations, Portfolio, Sector Scan, Economy Watch, Personal Finance, Insurance, Tax Planning, Commodity, Currency, Crypto / FinTech).
+  - Added published month filter dropdown and quick `#tag` filter chips.
+- **Right Sidebar "Visit Hedge at" Social Widget**:
+  - Added official social channel cards for YouTube, Facebook, Twitter, Instagram, and LinkedIn in the right sidebar.
+
+### Changed
+- **Mobile-First Layout Hierarchy**:
+  - Strictly re-ordered public layout on mobile screens (`< 1024px`):
+    1. `#section-market-pulse-desk` (starting with `#section-market-pulse-header`) displayed at the top.
+    2. Redesigned compact Top Movers cards (`card-mover-${stock.id}` e.g. `card-mover-trend-live-g-1`..`g-n`) with sleek `w-[145px]` card footprint, top accent trend bar (emerald for gainers, crimson for losers), high-density typography, price, and search filter shortcut.
+    3. Mobile Next (`#btn-movers-next`) and Previous (`#btn-movers-prev`) buttons with horizontal touch swipe/scroll and CSS snap.
+    4. `#section-find-stories` minimised by default on mobile (`filterExpanded = false`), expanding on tap.
+    5. `#section-mobile-categories` horizontal scrolling category pill strip placed directly below Find Stories.
+    6. Editorial `#section-stories-grid` with pagination.
+- **Multi-Line Market Ticker on Mobile**:
+  - Restructured `#section-market-ticker` from single-row flex to `flex flex-col sm:flex-row`.
+  - On mobile screens, `#ticker-control-strip` sits on line 1 with full width (`w-full justify-between`) holding the live indicator, filter pills, play/pause, and speed controls.
+  - `#ticker-scroller-container` drops to line 2 with 100% viewport width (`w-full sm:flex-1`), giving ticker quotes the full width to scroll without being squeezed by control buttons.
+- **Admin Panel Market News Wire & Navigation Tabs**:
+  - Moved **Market News Wire** to be the primary first tab in the Admin Panel.
+  - Re-ordered language filter pills to `[മലയാളം, English, All]` with Malayalam set as primary default and `All` at the end.
+  - Removed `(Primary)` badge and `Saved in DB` count from tab headers.
+  - Made `#nav-admin-tabs` mobile-responsive with horizontal smooth scrolling (`overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap`) to prevent tabs from overflowing mobile viewports.
+- **Desktop Sidebar Ordering**:
+  - Left sidebar (`#section-left-sidebar`): ordered as `#section-desktop-categories` (first), `#section-find-stories` (second, expanded), `#section-journal-promo-left` (third).
+  - Right sidebar (`#section-right-sidebar`): `#section-journal-subscription-right` (non-sticky), `#section-market-radar-today`, and `#section-visit-hedge-at`.
+
+---
+
 ## [2.1.0] - 2026-11-03
 
 ### Changed

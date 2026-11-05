@@ -21,6 +21,8 @@ interface ArticleDetailProps {
   onBack: () => void;
   onSelectRelated: (canonicalUrl: string) => void;
   onEditStory?: (story: Story) => void;
+  isBookmarked?: boolean;
+  onToggleBookmark?: () => void;
 }
 
 export const ArticleDetail: React.FC<ArticleDetailProps> = ({
@@ -29,9 +31,12 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
   onBack,
   onSelectRelated,
   onEditStory,
+  isBookmarked,
+  onToggleBookmark,
 }) => {
   const [copied, setCopied] = useState(false);
-  const [bookmarked, setBookmarked] = useState(false);
+  const [localBookmarked, setLocalBookmarked] = useState(false);
+  const isSaved = isBookmarked !== undefined ? isBookmarked : localBookmarked;
   const [showSeoMeta, setShowSeoMeta] = useState(false);
   const [imgError, setImgError] = useState(false);
 
@@ -60,7 +65,7 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
   };
 
   const fallbackImage =
-    'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
+    'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=560&h=320&q=80';
 
   const keywordsArray = story.keywords
     ? story.keywords.split(',').map((k) => k.trim()).filter(Boolean)
@@ -194,13 +199,23 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
             </button>
 
             <button
-              onClick={() => setBookmarked(!bookmarked)}
-              className={`p-1.5 rounded border border-[#E2E4E8] hover:border-[#6A1B9A] transition-colors ${
-                bookmarked ? 'text-[#6A1B9A] bg-[#F3E5F5]' : 'text-[#58606E]'
+              id="btn-bookmark-article-detail"
+              type="button"
+              onClick={() => {
+                if (onToggleBookmark) {
+                  onToggleBookmark();
+                } else {
+                  setLocalBookmarked(!localBookmarked);
+                }
+              }}
+              className={`p-1.5 rounded border transition-colors cursor-pointer ${
+                isSaved
+                  ? 'border-[#903E97] text-[#903E97] bg-[#FAF7FC]'
+                  : 'border-[#E2E4E8] text-[#58606E] hover:border-[#903E97] hover:text-[#903E97]'
               }`}
-              title="Bookmark story"
+              title={isSaved ? 'Remove from bookmarks' : 'Bookmark story'}
             >
-              <Bookmark className={`w-3.5 h-3.5 ${bookmarked ? 'fill-[#6A1B9A]' : ''}`} />
+              <Bookmark className={`w-3.5 h-3.5 ${isSaved ? 'fill-current text-[#903E97]' : ''}`} />
             </button>
           </div>
         </div>

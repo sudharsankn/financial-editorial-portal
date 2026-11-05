@@ -53,15 +53,31 @@ export default function App() {
   const [supabaseModalOpen, setSupabaseModalOpen] = useState(false);
   const [nextJsModalOpen, setNextJsModalOpen] = useState(false);
 
-  // Bookmarks count from local storage
-  const [bookmarkCount, setBookmarkCount] = useState<number>(() => {
+  // Saved Bookmarks Set & Real-Time Sync
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem('hedge_saved_bookmarks');
-      return raw ? JSON.parse(raw).length : 0;
+      return raw ? new Set(JSON.parse(raw)) : new Set();
     } catch {
-      return 0;
+      return new Set();
     }
   });
+  const [showOnlyBookmarks, setShowOnlyBookmarks] = useState(false);
+
+  const toggleBookmark = useCallback((id: string) => {
+    setBookmarkedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      try {
+        localStorage.setItem('hedge_saved_bookmarks', JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   // Load published stories for subscriber feed
   const loadSubscriberStories = useCallback(async () => {
@@ -251,7 +267,10 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-[#F2F2F2] text-[#262B2E] font-['Open_Sans',_sans-serif]">
       {/* 1. Header (Exact Hedge Ohari Navbar: Hamburger Left, Logo Center, Subscribe/Bookmark/Search Right) */}
       <HedgeNavbar
-        onNavigateHome={() => handleNavigate('feed')}
+        onNavigateHome={() => {
+          setShowOnlyBookmarks(false);
+          handleNavigate('feed');
+        }}
         onOpenSidebar={() => setSidebarOpen(true)}
         onOpenAdmin={() => handleNavigate('admin')}
         searchQuery={searchQuery}
@@ -260,10 +279,12 @@ export default function App() {
           setSearchQuery(q);
           if (currentView !== 'feed') setCurrentView('feed');
         }}
-        bookmarkCount={bookmarkCount}
+        bookmarkCount={bookmarkedIds.size}
+        isBookmarksActive={showOnlyBookmarks}
         onOpenBookmarks={() => {
-          // If bookmarks clicked, toggle bookmarks filter
+          setShowOnlyBookmarks((prev) => !prev);
           setSelectedSection('All');
+          if (currentView !== 'feed') handleNavigate('feed');
         }}
         onOpenSubscribe={() => {
           window.open('https://hedgeohari.com/subscribe', '_blank');
@@ -280,8 +301,14 @@ export default function App() {
             setAdminTab('markets');
             handleNavigate('admin');
           }}
-          onSelectCategory={(sec) => setSelectedSection(sec)}
-          onOpenIpoWatch={() => setSelectedSection('IPO Watch')}
+          onSelectCategory={(sec) => {
+            setShowOnlyBookmarks(false);
+            setSelectedSection(sec);
+          }}
+          onOpenIpoWatch={() => {
+            setShowOnlyBookmarks(false);
+            setSelectedSection('IPO Watch');
+          }}
         />
       )}
 
@@ -291,6 +318,7 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
         selectedSection={selectedSection}
         onSelectSection={(sec) => {
+          setShowOnlyBookmarks(false);
           setSelectedSection(sec);
           if (currentView !== 'feed') handleNavigate('feed');
         }}
@@ -298,7 +326,9 @@ export default function App() {
           window.open('https://hedgeohari.com/subscribe', '_blank');
         }}
         onOpenBookmarks={() => {
+          setShowOnlyBookmarks(true);
           setSelectedSection('All');
+          if (currentView !== 'feed') handleNavigate('feed');
         }}
         onOpenAdmin={() => handleNavigate('admin')}
       />
@@ -311,7 +341,10 @@ export default function App() {
             stories={publishedStories}
             loading={loading}
             selectedSection={selectedSection}
-            onSelectSection={setSelectedSection}
+            onSelectSection={(sec) => {
+              setShowOnlyBookmarks(false);
+              setSelectedSection(sec);
+            }}
             onSelectStory={handleSelectStory}
             onOpenSubscribe={() => window.open('https://hedgeohari.com/subscribe', '_blank')}
             marketTickers={marketTickers}
@@ -322,6 +355,10 @@ export default function App() {
               setSearchQuery(sym);
               if (currentView !== 'feed') setCurrentView('feed');
             }}
+            bookmarkedIds={bookmarkedIds}
+            onToggleBookmark={toggleBookmark}
+            showOnlyBookmarks={showOnlyBookmarks}
+            onToggleShowBookmarks={setShowOnlyBookmarks}
           />
         )}
 
@@ -337,6 +374,8 @@ export default function App() {
               setAdminTab('stories');
               setCurrentView('admin');
             }}
+            isBookmarked={bookmarkedIds.has(activeArticle.id)}
+            onToggleBookmark={() => toggleBookmark(activeArticle.id)}
           />
         )}
 
