@@ -4,7 +4,7 @@ import { Globe, Mail, Phone, ExternalLink } from 'lucide-react';
 export const HedgeFooter: React.FC = () => {
   return (
     <footer className="bg-white border-t border-[#E6E6E6] py-10 text-xs text-[#676A6C]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 border-b border-[#E6E6E6]">
           {/* Logo & Description */}
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">

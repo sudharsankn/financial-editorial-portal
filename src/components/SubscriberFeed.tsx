@@ -71,7 +71,7 @@ export const SubscriberFeed: React.FC<SubscriberFeedProps> = ({
     ipoFilter === 'all' ? publishedIpos : publishedIpos.filter((item) => item.status === ipoFilter);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8">
+    <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14 py-6 sm:py-8 space-y-8">
       {/* 1. Section Navigation Bar */}
       <div id="section-nav-strip" className="border-b border-[#E2E4E8]">
         <div className="flex items-center space-x-2 sm:space-x-8 overflow-x-auto no-scrollbar py-1">

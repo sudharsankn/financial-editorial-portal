@@ -181,13 +181,45 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
   return (
     <div className="bg-[#F2F2F2] min-h-screen py-4 sm:py-6">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* ======================================================== */}
-          {/* 1. LEFT SIDEBAR: Vertical Tab Menu (.section-left)        */}
+          {/* 1. LEFT SIDEBAR: Categories Menu (.section-left)          */}
           {/* ======================================================== */}
-          <aside className="w-full lg:w-56 shrink-0">
-            <div className="bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden sticky top-20">
+          <aside className="w-full lg:w-56 xl:w-64 2xl:w-72 shrink-0">
+            {/* Mobile / Tablet Horizontal Category Scroller */}
+            <div className="lg:hidden bg-white rounded border border-[#E6E6E6] p-2 shadow-2xs mb-2">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                {navSections.map((sec) => {
+                  const isActive = selectedSection === sec.value;
+                  return (
+                    <button
+                      key={sec.value}
+                      type="button"
+                      onClick={() => {
+                        onSelectSection(sec.value);
+                        if (sec.value === 'IPO Watch') {
+                          setActiveMarketTab('ipos');
+                          setDeskExpanded(true);
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
+                        isActive
+                          ? 'bg-[#903E97] text-white shadow-xs'
+                          : 'bg-[#FAF7FC] text-[#262B2E] hover:bg-[#F2F2F2]'
+                      }`}
+                    >
+                      {sec.value === 'IPO Watch' && <Rocket className="w-3.5 h-3.5" />}
+                      {sec.value === 'Market News' && <Activity className="w-3.5 h-3.5" />}
+                      <span>{sec.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Desktop Vertical Menu */}
+            <div className="hidden lg:block bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden sticky top-20">
               <div className="p-3.5 bg-[#FAF7FC] border-b border-[#E6E6E6] flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[#903E97]">
                   Categories
@@ -393,7 +425,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                       </div>
 
                       {/* Stock Cards Grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-4 gap-3">
                         {filteredMovers.slice(0, 8).map((stock) => {
                           const isGainer = stock.trend_type === 'gainer';
                           const symbol = stock.ticker_id || stock.company_name;
@@ -508,7 +540,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                       </div>
 
                       {/* IPO Cards Grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5">
                         {filteredIpos.slice(0, 6).map((ipo) => {
                           const isOpen = ipo.status === 'active';
                           const isUpcoming = ipo.status === 'upcoming';
@@ -582,7 +614,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   {/* TAB 3: BENCHMARK INDICES */}
                   {activeMarketTab === 'indices' && (
                     <div className="space-y-3">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2.5">
                         {effectiveIndices.map((indexItem) => (
                           <div
                             key={indexItem.id}
@@ -645,8 +677,9 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
-                {stories.map((story) => {
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6">
+                {stories.map((story, index) => {
+                  const isHero = index === 0;
                   const isSaved = bookmarkedIds.has(story.id);
                   const isCopied = copiedId === story.id;
                   const timeAgo = formatTimeAgo(story.published_at || story.created_at);
@@ -656,11 +689,17 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                     <article
                       key={story.id}
                       onClick={() => onSelectStory(story.canonical_url)}
-                      className="bg-white rounded border border-[#E6E6E6] shadow-2xs hover:shadow-sm transition-all duration-200 overflow-hidden cursor-pointer group"
+                      className={`bg-white rounded border border-[#E6E6E6] shadow-2xs hover:shadow-sm transition-all duration-200 overflow-hidden cursor-pointer group flex flex-col justify-between ${
+                        isHero ? 'xl:col-span-2' : ''
+                      }`}
                     >
                       {/* Story Card Image (.grid-image) */}
                       {story.lead_image_url && (
-                        <div className="w-full h-56 sm:h-72 md:h-80 overflow-hidden bg-[#F2F2F2] relative">
+                        <div
+                          className={`w-full overflow-hidden bg-[#F2F2F2] relative ${
+                            isHero ? 'h-56 sm:h-72 md:h-80 xl:h-96' : 'h-48 sm:h-56'
+                          }`}
+                        >
                           <img
                             src={story.lead_image_url}
                             alt={story.heading}
@@ -676,21 +715,38 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                                 {story.category}
                               </span>
                             )}
+                            {isHero && (
+                              <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-[#262B2E] text-white shadow-xs hidden sm:inline-block">
+                                Featured
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
 
                       {/* Story Details (.grid-description) */}
-                      <div className="p-4 sm:p-5">
-                        {/* Heading (.grid-description-content h5) */}
-                        <h2 className="text-lg sm:text-[21px] font-['Noto_Sans_Malayalam',_'Open_Sans',_sans-serif] font-bold text-[#262B2E] group-hover:text-[#903E97] transition-colors leading-[1.6] mb-2.5">
-                          {story.heading}
-                        </h2>
+                      <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between">
+                        <div>
+                          {/* Heading (.grid-description-content h5) */}
+                          <h2
+                            className={`font-['Noto_Sans_Malayalam',_'Open_Sans',_sans-serif] font-bold text-[#262B2E] group-hover:text-[#903E97] transition-colors leading-[1.6] mb-2.5 ${
+                              isHero
+                                ? 'text-lg sm:text-[21px] xl:text-[23px]'
+                                : 'text-base sm:text-lg'
+                            }`}
+                          >
+                            {story.heading}
+                          </h2>
 
-                        {/* Excerpt */}
-                        <p className="text-xs sm:text-[13px] text-[#676A6C] leading-relaxed line-clamp-3 mb-4">
-                          {excerpt}
-                        </p>
+                          {/* Excerpt */}
+                          <p
+                            className={`text-xs text-[#676A6C] leading-relaxed line-clamp-3 mb-4 ${
+                              isHero ? 'sm:text-[14px]' : 'sm:text-[13px]'
+                            }`}
+                          >
+                            {excerpt}
+                          </p>
+                        </div>
 
                         {/* Card Footer (.grid-description-footer) */}
                         <div className="pt-3 border-t border-[#F2F2F2] flex items-center justify-between text-xs text-[#878787]">
@@ -738,7 +794,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
           {/* ======================================================== */}
           {/* 3. RIGHT SIDEBAR: Subscription & Fast Market Snapshot    */}
           {/* ======================================================== */}
-          <aside className="w-full lg:w-72 shrink-0 space-y-4">
+          <aside className="w-full lg:w-72 xl:w-80 2xl:w-96 shrink-0 space-y-4">
             {/* Journal Promo Card */}
             <div className="bg-white rounded border border-[#E6E6E6] p-5 shadow-2xs text-center space-y-3 sticky top-20">
               <div className="w-12 h-12 mx-auto rounded-full bg-[#FAF7FC] border border-[#903E97]/20 flex items-center justify-center text-[#903E97] font-extrabold text-sm">

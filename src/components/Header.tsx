@@ -57,7 +57,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="bg-white border-b border-[#E2E4E8] sticky top-0 z-30 shadow-[0_1px_3px_rgba(30,34,41,0.03)]">
       {/* Brand & Top Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14 py-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         {/* Brand Logo & Editorial Info */}
         <div className="flex items-center gap-4">
           <button

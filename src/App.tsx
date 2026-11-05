@@ -359,7 +359,7 @@ export default function App() {
         {/* VIEW C: ADMIN EDITORIAL DASHBOARD */}
         {currentView === 'admin' && (
           <div className="bg-[#F4F4F6] min-h-screen py-4">
-            <div className="max-w-7xl mx-auto px-4 mb-4 flex items-center justify-between">
+            <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14 mb-4 flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => handleNavigate('feed')}

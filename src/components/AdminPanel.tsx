@@ -571,7 +571,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const headingScript = detectScript(formData.heading);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+    <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14 py-4 sm:py-6">
       {/* Notifications Banner */}
       {message && (
         <div
@@ -780,7 +780,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 alt=""
                                 className="w-14 h-8 object-cover rounded border border-[#E2E4E8] shrink-0"
                               />
-                              <div className="max-w-md">
+                              <div className="max-w-md xl:max-w-xl 2xl:max-w-3xl">
                                 <span className="font-bold text-[#1E2229] hover:text-[#6A1B9A] line-clamp-1">
                                   {story.heading}
                                 </span>
@@ -1121,9 +1121,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
 
           {/* Form Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 xl:grid-cols-12 gap-6 xl:gap-8">
             {/* Left Column: Core Editorial Content (Cols 1 to 8) */}
-            <div className="lg:col-span-8 space-y-6">
+            <div className="lg:col-span-8 xl:col-span-8 2xl:col-span-9 space-y-6">
               {/* Section & Category Selects */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1242,7 +1242,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             {/* Right Column: Media, Canonical URL & Metadata (Cols 9 to 12) */}
-            <div className="lg:col-span-4 space-y-6">
+            <div className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 space-y-6">
               {/* Lead Image: Compression & Supabase Bucket Upload (560x320 JPG) */}
               <div className="bg-white rounded border border-[#E2E4E8] p-4 space-y-3">
                 <div className="flex items-center justify-between">

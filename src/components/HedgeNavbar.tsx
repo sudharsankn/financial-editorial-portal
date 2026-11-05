@@ -46,7 +46,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
   return (
     <>
       <header className="sticky top-0 z-40 bg-white border-b border-[#E6E6E6] shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[60px] flex items-center justify-between">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14 h-[60px] flex items-center justify-between">
           {/* Left: Hamburger Menu */}
           <div className="w-1/3 flex items-center">
             <button
