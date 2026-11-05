@@ -141,19 +141,38 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
     return ipos;
   }, [ipos, ipoFilter]);
 
-  // Top Gainer and Top Loser for Fast Glance
-  const topGainer = useMemo(
-    () => effectiveTrending.find((s) => s.trend_type === 'gainer'),
-    [effectiveTrending]
-  );
-  const topLoser = useMemo(
-    () => effectiveTrending.find((s) => s.trend_type === 'loser'),
-    [effectiveTrending]
-  );
-  const featuredIpo = useMemo(
-    () => ipos.find((i) => i.status === 'active') || ipos[0],
-    [ipos]
-  );
+  // Top Gainer, Top Loser & Featured IPO with strict sorting
+  const topGainer = useMemo(() => {
+    const gainers = effectiveTrending.filter((s) => s.trend_type === 'gainer');
+    if (gainers.length === 0) return null;
+    return gainers.reduce((max, s) => {
+      const sVal = parseFloat(String(s.percent_change).replace(/[^\d.-]/g, '')) || 0;
+      const maxVal = parseFloat(String(max.percent_change).replace(/[^\d.-]/g, '')) || 0;
+      return sVal > maxVal ? s : max;
+    }, gainers[0]);
+  }, [effectiveTrending]);
+
+  const topLoser = useMemo(() => {
+    const losers = effectiveTrending.filter((s) => s.trend_type === 'loser');
+    if (losers.length === 0) return null;
+    return losers.reduce((min, s) => {
+      const sVal = parseFloat(String(s.percent_change).replace(/[^\d.-]/g, '')) || 0;
+      const minVal = parseFloat(String(min.percent_change).replace(/[^\d.-]/g, '')) || 0;
+      return sVal < minVal ? s : min;
+    }, losers[0]);
+  }, [effectiveTrending]);
+
+  const featuredIpo = useMemo(() => {
+    const openIpo = ipos.find((i) => i.status === 'active');
+    if (openIpo) return openIpo;
+    const upcomingIpo = ipos.find((i) => i.status === 'upcoming');
+    if (upcomingIpo) return upcomingIpo;
+    return ipos[0] || null;
+  }, [ipos]);
+
+  const mainIndex = useMemo(() => {
+    return effectiveIndices.find((i) => i.symbol === 'NIFTY 50') || effectiveIndices[0];
+  }, [effectiveIndices]);
 
   // Strip rich text HTML safely for grid preview
   const getExcerpt = (html: string) => {
@@ -745,50 +764,99 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
               </button>
 
               {/* Fast Market Glance Mini-Widget */}
-              <div className="pt-3 border-t border-[#E6E6E6] text-left space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#903E97] block">
-                  Market Radar Today
-                </span>
+              <div className="pt-3 border-t border-[#E6E6E6] text-left space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#903E97] flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#0E8A54] animate-pulse" />
+                    Market Radar Today
+                  </span>
+                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-[#0E8A54]/10 text-[#0E8A54]">
+                    Live
+                  </span>
+                </div>
 
-                {topGainer && (
-                  <div className="flex items-center justify-between text-xs py-1 px-2 rounded bg-[#E8F5EE]/60">
+                {/* Primary Benchmark Index */}
+                {mainIndex && (
+                  <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#FAF7FC] border border-[#E6E6E6]">
                     <div>
-                      <span className="font-bold text-[#262B2E] text-[11px] block">
-                        {topGainer.ticker_id || topGainer.company_name}
+                      <span className="font-extrabold text-[#262B2E] text-[11px] block">
+                        {mainIndex.symbol}
                       </span>
-                      <span className="text-[10px] text-[#676A6C]">Top Gainer</span>
+                      <span className="text-[10px] text-[#676A6C] font-semibold tabular-nums">
+                        {mainIndex.price}
+                      </span>
                     </div>
-                    <span className="text-[11px] font-bold text-[#0E8A54] tabular-nums">
+                    <span
+                      className={`text-[11px] font-black tabular-nums flex items-center gap-0.5 ${
+                        mainIndex.is_positive ? 'text-[#0E8A54]' : 'text-[#D32F2F]'
+                      }`}
+                    >
+                      {mainIndex.is_positive ? (
+                        <TrendingUp className="w-3 h-3" />
+                      ) : (
+                        <TrendingDown className="w-3 h-3" />
+                      )}
+                      {mainIndex.change}
+                    </span>
+                  </div>
+                )}
+
+                {/* Top Gainer */}
+                {topGainer && (
+                  <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#E8F5EE]/70 border border-[#0E8A54]/15">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-[#262B2E] text-[11px]">
+                          {topGainer.ticker_id || topGainer.company_name}
+                        </span>
+                        <span className="text-[9px] font-bold px-1 rounded bg-[#0E8A54]/15 text-[#0E8A54]">
+                          Gainer
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-[#58606E] tabular-nums">
+                        {String(topGainer.price).startsWith('₹') ? topGainer.price : `₹${topGainer.price}`}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-black text-[#0E8A54] tabular-nums">
                       {topGainer.percent_change}
                     </span>
                   </div>
                 )}
 
+                {/* Top Loser */}
                 {topLoser && (
-                  <div className="flex items-center justify-between text-xs py-1 px-2 rounded bg-[#FDECEC]/60">
+                  <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#FDECEC]/70 border border-[#D32F2F]/15">
                     <div>
-                      <span className="font-bold text-[#262B2E] text-[11px] block">
-                        {topLoser.ticker_id || topLoser.company_name}
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-[#262B2E] text-[11px]">
+                          {topLoser.ticker_id || topLoser.company_name}
+                        </span>
+                        <span className="text-[9px] font-bold px-1 rounded bg-[#D32F2F]/15 text-[#D32F2F]">
+                          Loser
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-[#58606E] tabular-nums">
+                        {String(topLoser.price).startsWith('₹') ? topLoser.price : `₹${topLoser.price}`}
                       </span>
-                      <span className="text-[10px] text-[#676A6C]">Top Loser</span>
                     </div>
-                    <span className="text-[11px] font-bold text-[#D32F2F] tabular-nums">
+                    <span className="text-[11px] font-black text-[#D32F2F] tabular-nums">
                       {topLoser.percent_change}
                     </span>
                   </div>
                 )}
 
+                {/* Featured IPO */}
                 {featuredIpo && (
-                  <div className="flex items-center justify-between text-xs py-1 px-2 rounded bg-[#FAF7FC] border border-[#903E97]/15">
-                    <div>
-                      <span className="font-bold text-[#262B2E] text-[11px] block line-clamp-1">
+                  <div className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#FAF7FC] border border-[#903E97]/20">
+                    <div className="min-w-0 pr-1">
+                      <span className="font-bold text-[#262B2E] text-[11px] block truncate">
                         {featuredIpo.name}
                       </span>
-                      <span className="text-[10px] text-[#903E97]">
-                        {featuredIpo.status === 'active' ? 'IPO Open Now' : 'IPO Radar'}
+                      <span className="text-[9px] font-bold text-[#903E97] block">
+                        {featuredIpo.status === 'active' ? '● Open Now' : '● Upcoming'} &bull; {featuredIpo.is_sme ? 'SME' : 'Mainboard'}
                       </span>
                     </div>
-                    <span className="text-[10px] font-bold text-[#262B2E] tabular-nums">
+                    <span className="text-[11px] font-extrabold text-[#262B2E] tabular-nums shrink-0">
                       ₹{featuredIpo.issue_price || featuredIpo.max_price || 0}
                     </span>
                   </div>
