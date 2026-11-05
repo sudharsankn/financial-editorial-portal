@@ -708,33 +708,56 @@ export async function fetchSavedStockData(options?: {
  * and generates live top gainers & losers for Nifty universe.
  */
 async function runClientSideMarketFallback(symbol: string) {
-  // 1. Fetch Real-Time RSS News with full content and live images from top sources (ET, LiveMint, Google News)
+  // 1. Fetch Real-Time RSS News with full content and live images from diverse top sources (Reuters, Mint, Business Standard, ET, Bloomberg, NDTV)
   let newsItems: any[] = [];
   try {
-    const [etFeedRes, mintFeedRes, googleFeedRes] = await Promise.all([
-      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://economictimes.indiatimes.com/markets/stocks/news/rssfeeds/2146842.cms')}`).catch(() => null),
-      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://www.livemint.com/rss/markets')}`).catch(() => null),
+    const [googleFeedRes, mintFeedRes, bsFeedRes, etFeedRes] = await Promise.all([
       fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://news.google.com/rss/search?q=Indian+Stock+Market+when:1d&hl=en-IN&gl=IN&ceid=IN:en')}`).catch(() => null),
+      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://www.livemint.com/rss/markets')}`).catch(() => null),
+      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://www.business-standard.com/rss/markets-106.rss')}`).catch(() => null),
+      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://economictimes.indiatimes.com/markets/stocks/news/rssfeeds/2146842.cms')}`).catch(() => null),
     ]);
 
-    const collected: any[] = [];
-    if (etFeedRes && etFeedRes.ok) {
-      const etData = await etFeedRes.json();
-      if (etData.status === 'ok' && Array.isArray(etData.items)) {
-        collected.push(...etData.items.map((it: any) => ({ ...it, defaultSource: 'Economic Times' })));
+    const buckets: any[][] = [];
+
+    if (googleFeedRes && googleFeedRes.ok) {
+      const gData = await googleFeedRes.json();
+      if (gData.status === 'ok' && Array.isArray(gData.items)) {
+        buckets.push(gData.items.map((it: any) => ({ ...it, defaultSource: 'Market Desk' })));
       }
     }
     if (mintFeedRes && mintFeedRes.ok) {
       const mintData = await mintFeedRes.json();
       if (mintData.status === 'ok' && Array.isArray(mintData.items)) {
-        collected.push(...mintData.items.map((it: any) => ({ ...it, defaultSource: 'LiveMint' })));
+        buckets.push(mintData.items.map((it: any) => ({ ...it, defaultSource: 'LiveMint' })));
       }
     }
-    if (collected.length < 5 && googleFeedRes && googleFeedRes.ok) {
-      const gData = await googleFeedRes.json();
-      if (gData.status === 'ok' && Array.isArray(gData.items)) {
-        collected.push(...gData.items.map((it: any) => ({ ...it, defaultSource: 'Market Desk' })));
+    if (bsFeedRes && bsFeedRes.ok) {
+      const bsData = await bsFeedRes.json();
+      if (bsData.status === 'ok' && Array.isArray(bsData.items)) {
+        buckets.push(bsData.items.map((it: any) => ({ ...it, defaultSource: 'Business Standard' })));
       }
+    }
+    if (etFeedRes && etFeedRes.ok) {
+      const etData = await etFeedRes.json();
+      if (etData.status === 'ok' && Array.isArray(etData.items)) {
+        buckets.push(etData.items.map((it: any) => ({ ...it, defaultSource: 'Economic Times' })));
+      }
+    }
+
+    // Interleave across sources in round-robin fashion so publishers are balanced
+    const collected: any[] = [];
+    let rIdx = 0;
+    while (true) {
+      let addedAny = false;
+      for (const bucket of buckets) {
+        if (rIdx < bucket.length) {
+          collected.push(bucket[rIdx]);
+          addedAny = true;
+        }
+      }
+      if (!addedAny || collected.length >= 80) break;
+      rIdx++;
     }
 
     const seenTitles = new Set();
@@ -775,7 +798,7 @@ async function runClientSideMarketFallback(symbol: string) {
         is_saved_to_db: false,
       });
 
-      if (newsItems.length >= 20) break;
+      if (newsItems.length >= 30) break;
     }
   } catch (err) {
     console.warn('Real-time RSS fetch fallback warning:', err);

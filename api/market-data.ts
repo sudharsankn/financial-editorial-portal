@@ -115,13 +115,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // b. Real-time Market News via Multi-Source Financial RSS (ET, Mint, Google News)
       // c. Target Company Fundamental Dossier via Yahoo Finance
       // d. Real-time Indian IPO Announcements
-      const [quotesBatch, etNewsFeed, mintNewsFeed, googleNewsFeed, companySummary, ipoFeed] = await Promise.all([
+      const [quotesBatch, etNewsFeed, mintNewsFeed, bsNewsFeed, ndtvNewsFeed, googleNewsFeed, companySummary, ipoFeed] = await Promise.all([
         Promise.all(TRACKED_NIFTY_SYMBOLS.map((s) => yf.quote(s).catch(() => null))),
         rssParser
           .parseURL('https://economictimes.indiatimes.com/markets/stocks/news/rssfeeds/2146842.cms')
           .catch(() => ({ items: [] })),
         rssParser
           .parseURL('https://www.livemint.com/rss/markets')
+          .catch(() => ({ items: [] })),
+        rssParser
+          .parseURL('https://www.business-standard.com/rss/markets-106.rss')
+          .catch(() => ({ items: [] })),
+        rssParser
+          .parseURL('https://feeds.feedburner.com/ndtvprofit-latest')
           .catch(() => ({ items: [] })),
         rssParser
           .parseURL(
@@ -177,12 +183,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           volume: q.regularMarketVolume ? String(q.regularMarketVolume) : undefined,
         }));
 
-      // Combine and parse rich news items with images and URLs
-      const allNewsRaw = [
-        ...(etNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'Economic Times' })),
-        ...(mintNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'LiveMint' })),
-        ...(googleNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'Market Desk' })),
+      // Interleave feeds in round-robin fashion so we get diverse sources (Reuters, Mint, NDTV, BS, Bloomberg, ET)
+      const feedBuckets = [
+        (googleNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'Market Desk' })),
+        (mintNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'LiveMint' })),
+        (bsNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'Business Standard' })),
+        (ndtvNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'NDTV Profit' })),
+        (etNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'Economic Times' })),
       ];
+
+      const allNewsRaw: any[] = [];
+      let roundRobinIdx = 0;
+      while (true) {
+        let addedAny = false;
+        for (const bucket of feedBuckets) {
+          if (roundRobinIdx < bucket.length) {
+            allNewsRaw.push(bucket[roundRobinIdx]);
+            addedAny = true;
+          }
+        }
+        if (!addedAny || allNewsRaw.length >= 80) break;
+        roundRobinIdx++;
+      }
 
       const seenNewsTitles = new Set();
       const newsItems: any[] = [];
@@ -218,7 +240,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           category: 'Market Trends',
         });
 
-        if (newsItems.length >= 20) break;
+        if (newsItems.length >= 30) break;
       }
 
       // Process Company Dossier
