@@ -59,7 +59,7 @@
 }
 
 /* ==============================================================================
-   Continuous Smooth Financial Marquee Ticker
+   Continuous Slow Smooth Financial Marquee Ticker
    ============================================================================== */
 @keyframes tickerSlide {
   0% {
@@ -73,7 +73,7 @@
 .animate-ticker {
   display: flex;
   width: max-content;
-  animation: tickerSlide 45s linear infinite;
+  animation: tickerSlide 110s linear infinite;
   will-change: transform;
 }
 
