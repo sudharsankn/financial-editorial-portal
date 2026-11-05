@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   TrendingStockItem,
   IpoItemRecord,
+  NewsItemRecord,
   Story,
 } from '../types/story';
 import {
@@ -9,6 +10,8 @@ import {
   fetchTrendingStocks,
   fetchIpos,
   fetchSavedStockData,
+  saveNewsItemToDatabase,
+  fetchSavedNews,
   UnifiedMarketSyncResults,
 } from '../lib/marketData';
 import { formatTimeAgo } from '../lib/timeAgo';
@@ -30,6 +33,9 @@ import {
   ChevronRight,
   Sparkles,
   Zap,
+  BookmarkPlus,
+  Check,
+  Bookmark,
 } from 'lucide-react';
 
 interface StockDataPanelProps {
@@ -45,16 +51,17 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
 }) => {
   // Sync state
   const [syncing, setSyncing] = useState(false);
-  const [syncStockSymbol, setSyncStockSymbol] = useState('RELIANCE');
   const [lastSyncResult, setLastSyncResult] = useState<UnifiedMarketSyncResults | null>(null);
 
   // Active view tab after fetch
-  const [activeTab, setActiveTab] = useState<'trending' | 'news' | 'ipo' | 'stock'>('trending');
+  const [activeTab, setActiveTab] = useState<'trending' | 'news' | 'ipo' | 'stock'>('news');
 
   // Loaded database state
   const [trendingStocks, setTrendingStocks] = useState<TrendingStockItem[]>([]);
   const [ipos, setIpos] = useState<IpoItemRecord[]>([]);
   const [stockDossiers, setStockDossiers] = useState<any[]>([]);
+  const [savedNewsList, setSavedNewsList] = useState<NewsItemRecord[]>([]);
+  const [savingNewsId, setSavingNewsId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Filter for IPO sub-tab
@@ -63,14 +70,16 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
   const refreshPanelData = async () => {
     setLoading(true);
     try {
-      const [trendList, ipoList, stockList] = await Promise.all([
+      const [trendList, ipoList, stockList, newsList] = await Promise.all([
         fetchTrendingStocks(false),
         fetchIpos(false),
         fetchSavedStockData({ endpoint: 'stock' }),
+        fetchSavedNews(),
       ]);
       setTrendingStocks(trendList);
       setIpos(ipoList);
       setStockDossiers(stockList);
+      setSavedNewsList(newsList);
     } catch {}
     setLoading(false);
   };
@@ -82,14 +91,14 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
   // 1-Click Unified Action (Free Yahoo Finance & News Engine)
   const handleSingleClickFetch = async () => {
     setSyncing(true);
-    const res = await executeUnifiedMarketSync(syncStockSymbol);
+    const res = await executeUnifiedMarketSync('RELIANCE');
     setSyncing(false);
     setLastSyncResult(res);
 
     if (res.success) {
       onNotify?.({
         type: 'success',
-        text: `Market sync complete! Merged ${res.news.mergedStoriesCount} news drafts into stories, updated ${res.trending.count} trending stocks, ${res.ipo.count} IPOs, and ${res.stock.symbol} stock dossier!`,
+        text: `Fetched ${res.news.count} live market news items, ${res.trending.count} trending movers, and ${res.ipo.count} IPOs! You can now manually save news items to the 'news' table.`,
       });
       await refreshPanelData();
       if (onRefreshAllData) {
@@ -98,7 +107,25 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
     } else {
       onNotify?.({
         type: 'error',
-        text: res.error || 'Failed to complete unified sync.',
+        text: res.error || 'Failed to fetch market data.',
+      });
+    }
+  };
+
+  const handleSaveNews = async (item: NewsItemRecord) => {
+    setSavingNewsId(item.id);
+    const result = await saveNewsItemToDatabase(item);
+    setSavingNewsId(null);
+    if (result.success) {
+      onNotify?.({
+        type: 'success',
+        text: `"${item.title.slice(0, 40)}..." saved to 'news' table! It is now available in Create New Story dropdown.`,
+      });
+      await refreshPanelData();
+    } else {
+      onNotify?.({
+        type: 'error',
+        text: result.error || 'Failed to save news.',
       });
     }
   };
@@ -122,7 +149,7 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
               </span>
             </div>
             <p className="text-xs text-[#58606E]">
-              Captures live market data in a single click: /news into Stories (Draft), /trending (Gainers &amp; Losers), and /ipo (Published) powered by Yahoo Finance and Real-Time RSS.
+              Captures live market data in a single click: Review all real-time news with full images &amp; content, then manually save to <code className="text-xs font-mono">public.news</code> for story drafting.
             </p>
           </div>
 
@@ -196,12 +223,17 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
             }`}
           >
             <Newspaper className="w-4 h-4 text-[#6A1B9A]" />
-            <span>Market News (Merged into Stories)</span>
-            {lastSyncResult?.news.mergedStoriesCount ? (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30 font-bold">
-                +{lastSyncResult.news.mergedStoriesCount} Drafts
+            <span>Market News Wire</span>
+            {lastSyncResult?.news.items?.length ? (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[#FAF7FC] text-[#6A1B9A] border border-[#6A1B9A]/30 font-bold">
+                {lastSyncResult.news.items.length} Fetched
               </span>
             ) : null}
+            {savedNewsList.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30 font-bold">
+                {savedNewsList.length} in DB
+              </span>
+            )}
           </button>
 
           <button
@@ -329,58 +361,129 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
         {/* TAB CONTENT: 2. MARKET NEWS */}
         {activeTab === 'news' && (
           <div id="section-news-container" className="p-5 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-[#E2E4E8]">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[#E2E4E8]">
               <div>
                 <h3 className="font-bold text-sm text-[#1E2229] flex items-center gap-1.5">
                   <Newspaper className="w-4 h-4 text-[#6A1B9A]" />
-                  <span>Market News (Ingested into Stories as Draft)</span>
+                  <span>Real-Time Market News Feed</span>
                 </h3>
                 <p className="text-xs text-[#58606E]">
-                  Merged directly into <code className="text-xs font-mono">public.stories</code> • Status: <strong>Draft</strong> • Section: <strong>Market News</strong>
+                  Browse real-time headlines with lead images and wire URLs. Click <strong>&quot;Save to News Table&quot;</strong> to save any item to <code className="text-xs font-mono">public.news</code> for story drafting.
                 </p>
               </div>
-              <span className="text-xs text-[#0E8A54] font-bold">
-                ✓ Available in Stories Manager
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[#58606E] font-medium">
+                  Saved in DB: <strong>{savedNewsList.length}</strong>
+                </span>
+              </div>
             </div>
 
+            {/* List of News Items from Latest Fetch */}
             {lastSyncResult?.news.items && lastSyncResult.news.items.length > 0 ? (
-              <div className="divide-y divide-[#E2E4E8]">
-                {lastSyncResult.news.items.slice(0, 15).map((item: any, i: number) => (
-                  <div key={i} className="py-3 flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FAF7FC] text-[#6A1B9A] border border-[#6A1B9A]/30">
-                          {item.source || 'Market Wire'}
-                        </span>
-                        <span className="text-[11px] text-[#8A92A0]">
-                          {formatTimeAgo(item.pub_date)}
+              <div className="space-y-3">
+                {lastSyncResult.news.items.map((item: NewsItemRecord) => {
+                  const isSaved = savedNewsList.some((s) => s.title.toLowerCase() === item.title.toLowerCase());
+                  const isSavingThis = savingNewsId === item.id;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-4 rounded-lg border border-[#E2E4E8] bg-white hover:border-[#6A1B9A]/40 transition-all shadow-2xs flex flex-col sm:flex-row items-start gap-4"
+                    >
+                      {/* Image Thumbnail */}
+                      <div className="w-full sm:w-44 h-28 shrink-0 rounded overflow-hidden bg-[#F4F4F6] border border-[#E2E4E8] relative">
+                        <img
+                          src={item.image_url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src =
+                              'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
+                          }}
+                        />
+                        <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-black/70 text-white backdrop-blur-xs">
+                          {item.source}
                         </span>
                       </div>
-                      <h4 className="font-bold text-xs text-[#1E2229] hover:text-[#6A1B9A] transition-colors">
-                        {item.title}
-                      </h4>
-                      <p className="text-[11px] text-[#58606E] line-clamp-2 mt-0.5">
-                        {item.summary}
-                      </p>
+
+                      {/* Content details */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FAF7FC] text-[#6A1B9A] border border-[#6A1B9A]/30">
+                              {item.source}
+                            </span>
+                            <span className="text-[11px] text-[#8A92A0]">
+                              {formatTimeAgo(item.pub_date)}
+                            </span>
+                            {isSaved && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30 flex items-center gap-1">
+                                <Check className="w-3 h-3" />
+                                <span>Saved in news table</span>
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="font-bold text-sm text-[#1E2229] leading-snug">
+                            {item.title}
+                          </h4>
+                          <p className="text-xs text-[#58606E] mt-1.5 line-clamp-3 leading-relaxed">
+                            {item.summary}
+                          </p>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-[#F0F1F3]">
+                          {item.url ? (
+                            <a
+                              href={item.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#6A1B9A] hover:underline"
+                            >
+                              <span>Original Article</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : <span />}
+
+                          <button
+                            type="button"
+                            onClick={() => handleSaveNews(item)}
+                            disabled={isSavingThis || isSaved}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold transition-all ${
+                              isSaved
+                                ? 'bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30 cursor-default'
+                                : 'bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white shadow-xs'
+                            }`}
+                          >
+                            {isSavingThis ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                <span>Saving to DB...</span>
+                              </>
+                            ) : isSaved ? (
+                              <>
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Saved in News Table</span>
+                              </>
+                            ) : (
+                              <>
+                                <BookmarkPlus className="w-3.5 h-3.5" />
+                                <span>Save to News Table</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    {item.url && (
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-1.5 text-[#8A92A0] hover:text-[#6A1B9A] shrink-0"
-                        title="Original article"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
-              <div className="py-12 text-center text-xs text-[#8A92A0]">
-                No news items fetched in this session. Click <strong>&quot;Fetch Data on Click&quot;</strong> above to pull the latest market dispatches.
+              <div className="py-14 text-center text-xs text-[#8A92A0] bg-[#FAF7FC]/30 rounded-lg border border-dashed border-[#E2E4E8]">
+                <Newspaper className="w-8 h-8 text-[#8A92A0] mx-auto mb-2 opacity-50" />
+                <p className="font-bold text-[#1E2229] mb-1">No market news listed yet</p>
+                <p>Click <strong>&quot;Fetch Data on Click&quot;</strong> above to pull the latest market dispatches from Financial Wire.</p>
               </div>
             )}
           </div>
@@ -514,10 +617,10 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
                 <div className="flex items-center justify-between bg-[#FAF7FC] p-4 rounded border border-[#DA9CFF]/40">
                   <div>
                     <h3 className="font-bold text-base text-[#1E2229]">
-                      {lastSyncResult.stock.data.companyName || syncStockSymbol}
+                      {lastSyncResult.stock.data.companyName || lastSyncResult.stock.symbol || 'Company'}
                     </h3>
                     <p className="text-xs text-[#58606E]">
-                      Exchange: {lastSyncResult.stock.data.exchange || 'NSE'} • Symbol: {lastSyncResult.stock.data.symbol || syncStockSymbol}
+                      Exchange: {lastSyncResult.stock.data.exchange || 'NSE'} • Symbol: {lastSyncResult.stock.data.symbol || lastSyncResult.stock.symbol}
                     </p>
                   </div>
                   <div className="text-right">

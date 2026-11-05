@@ -166,6 +166,20 @@ export interface TrendingStockItem {
   created_at?: string;
 }
 
+export interface NewsItemRecord {
+  id: string;
+  title: string;
+  summary: string;
+  full_content?: string;
+  image_url: string;
+  url: string;
+  source: string;
+  pub_date: string;
+  category?: string;
+  is_saved_to_db?: boolean;
+  created_at?: string;
+}
+
 export interface IpoItemRecord {
   id: string;
   symbol: string;

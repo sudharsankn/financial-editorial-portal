@@ -155,12 +155,29 @@ CREATE TABLE IF NOT EXISTS public.indian_stock_data (
 CREATE INDEX IF NOT EXISTS idx_indian_stock_data_endpoint ON public.indian_stock_data (endpoint);
 CREATE INDEX IF NOT EXISTS idx_indian_stock_data_is_published ON public.indian_stock_data (is_published);
 
+-- 5b. Dedicated News Table (Curated Market News saved from Market Data Studio)
+CREATE TABLE IF NOT EXISTS public.news (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  full_content TEXT,
+  image_url TEXT NOT NULL,
+  url TEXT,
+  source TEXT NOT NULL DEFAULT 'Market Wire',
+  pub_date TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'Market Trends',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_news_created_at ON public.news (created_at DESC);
+
 -- 6. Row Level Security & Access Policies
 ALTER TABLE public.stories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.market_tickers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trending_stocks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ipos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.indian_stock_data ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.news ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Public stories" ON public.stories;
 CREATE POLICY "Public stories" ON public.stories FOR ALL USING (true) WITH CHECK (true);
@@ -176,6 +193,9 @@ CREATE POLICY "Public ipos" ON public.ipos FOR ALL USING (true) WITH CHECK (true
 
 DROP POLICY IF EXISTS "Public indian_stock_data" ON public.indian_stock_data;
 CREATE POLICY "Public indian_stock_data" ON public.indian_stock_data FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public news" ON public.news;
+CREATE POLICY "Public news" ON public.news FOR ALL USING (true) WITH CHECK (true);
 
 -- 7. Supabase Storage Bucket ('story-images') Setup & Public Policies
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

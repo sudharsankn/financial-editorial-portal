@@ -45,11 +45,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Fetch Market Data in Parallel:
       // a. Top Gainers & Losers from Nifty universe
-      // b. Real-time Market News via Google News RSS
+      // b. Real-time Market News via Multi-Source Financial RSS (ET, Mint, Google News)
       // c. Target Company Fundamental Dossier via Yahoo Finance
       // d. Real-time Indian IPO Announcements
-      const [quotesBatch, newsFeed, companySummary, ipoFeed] = await Promise.all([
+      const [quotesBatch, etNewsFeed, mintNewsFeed, googleNewsFeed, companySummary, ipoFeed] = await Promise.all([
         Promise.all(TRACKED_NIFTY_SYMBOLS.map((s) => yf.quote(s).catch(() => null))),
+        rssParser
+          .parseURL('https://economictimes.indiatimes.com/markets/stocks/news/rssfeeds/2146842.cms')
+          .catch(() => ({ items: [] })),
+        rssParser
+          .parseURL('https://www.livemint.com/rss/markets')
+          .catch(() => ({ items: [] })),
         rssParser
           .parseURL(
             'https://news.google.com/rss/search?q=Indian+Stock+Market+when:1d&hl=en-IN&gl=IN&ceid=IN:en'
@@ -104,25 +110,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           volume: q.regularMarketVolume ? String(q.regularMarketVolume) : undefined,
         }));
 
-      // Process News (Take top 20 items)
-      const newsItems = (newsFeed.items || []).slice(0, 20).map((item) => {
+      // Combine and parse rich news items with images and URLs
+      const allNewsRaw = [
+        ...(etNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'Economic Times' })),
+        ...(mintNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'LiveMint' })),
+        ...(googleNewsFeed.items || []).map((it: any) => ({ ...it, defaultSource: 'Market Desk' })),
+      ];
+
+      const seenNewsTitles = new Set();
+      const newsItems: any[] = [];
+      for (const item of allNewsRaw) {
         const rawTitle = item.title || 'Market Dispatch';
-        // Extract publisher if available (e.g., "Title - Publisher")
         const parts = rawTitle.split(' - ');
         const title = parts.length > 1 ? parts.slice(0, -1).join(' - ') : rawTitle;
-        const source = parts.length > 1 ? parts[parts.length - 1] : 'Market News Desk';
+        const source = parts.length > 1 ? parts[parts.length - 1] : (item.defaultSource || 'Market News Desk');
 
-        return {
+        if (seenNewsTitles.has(title.toLowerCase())) continue;
+        seenNewsTitles.add(title.toLowerCase());
+
+        const cleanSummary = (item.contentSnippet || item.content || item.summary || title).replace(/<[^>]*>?/gm, '').trim();
+
+        let image_url = item.enclosure?.url || item.thumbnail || '';
+        if (!image_url && typeof item.content === 'string') {
+          const m = item.content.match(/<img[^>]+src=["']([^"']+)["']/i);
+          if (m) image_url = m[1];
+        }
+        if (!image_url || image_url.length < 5) {
+          image_url = 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
+        }
+
+        newsItems.push({
+          id: crypto.randomUUID(),
           title,
-          summary: item.contentSnippet || item.content || title,
+          summary: cleanSummary,
+          full_content: cleanSummary,
           url: item.link || '',
           source,
           pub_date: item.pubDate || new Date().toISOString(),
-          image_url:
-            'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80',
-          topics: ['Market Trends', 'Markets'],
-        };
-      });
+          image_url,
+          category: 'Market Trends',
+        });
+
+        if (newsItems.length >= 20) break;
+      }
 
       // Process Company Dossier
       const price = companySummary?.price;

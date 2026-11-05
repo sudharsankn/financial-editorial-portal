@@ -11,10 +11,12 @@ import {
   NotificationStatus,
   MarketTickerItem,
   MarketTickerFormData,
+  NewsItemRecord,
 } from '../types/story';
 import { RichTextEditor } from './RichTextEditor';
 import { formatTimeAgo } from '../lib/timeAgo';
 import { StockDataPanel } from './StockDataPanel';
+import { fetchSavedNews } from '../lib/marketData';
 import {
   countGraphemes,
   generateCanonicalSlug,
@@ -57,6 +59,9 @@ import {
   BarChart2,
   Globe,
   Settings2,
+  Newspaper,
+  Copy,
+  ArrowDownToLine,
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -125,6 +130,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
 
   // Market Tickers Admin State
+  const [savedNewsOptions, setSavedNewsOptions] = useState<NewsItemRecord[]>([]);
+  const [selectedNewsId, setSelectedNewsId] = useState<string>('');
+  const [selectedNewsItem, setSelectedNewsItem] = useState<NewsItemRecord | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchSavedNews().then((list) => {
+      setSavedNewsOptions(list);
+    });
+  }, [mode, adminTab]);
+
   const initialTickerState: MarketTickerFormData = {
     symbol: '',
     price: '',
@@ -369,8 +385,62 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setFormData(initialFormState);
     setAutoSlug(true);
     onClearActiveStory();
+    setSelectedNewsId('');
+    setSelectedNewsItem(null);
     setMode('editor');
     setMessage(null);
+  };
+
+  const handleSelectNewsForDrafting = (newsId: string) => {
+    setSelectedNewsId(newsId);
+    if (!newsId) {
+      setSelectedNewsItem(null);
+      return;
+    }
+    const found = savedNewsOptions.find((n) => n.id === newsId);
+    if (found) {
+      setSelectedNewsItem(found);
+    }
+  };
+
+  const handleApplyNewsToStory = () => {
+    if (!selectedNewsItem) return;
+
+    let heading = selectedNewsItem.title;
+    if (countGraphemes(heading) > 70) {
+      heading = Array.from(heading).slice(0, 67).join('') + '...';
+    }
+
+    const slug = generateCanonicalSlug(heading) || `news-${Date.now()}`;
+    const fullHtml = `<h2>${selectedNewsItem.title}</h2><p class="lead">${selectedNewsItem.summary}</p>${selectedNewsItem.url ? `<p><a href="${selectedNewsItem.url}" target="_blank" rel="noopener noreferrer">Original source: ${selectedNewsItem.source} &rarr;</a></p>` : ''}`;
+
+    setFormData((prev) => ({
+      ...prev,
+      heading,
+      lead_image_url: selectedNewsItem.image_url || prev.lead_image_url,
+      short_description: `<p>${selectedNewsItem.summary}</p>`,
+      full_story: fullHtml,
+      canonical_url: slug,
+      keywords: `Market News, ${selectedNewsItem.source}, Stocks, Economy`,
+      seo_title: selectedNewsItem.title,
+      seo_description: selectedNewsItem.summary.slice(0, 160),
+      source_url: selectedNewsItem.url,
+      section: 'Market News',
+      category: 'Market Trends',
+    }));
+
+    setMessage({
+      type: 'success',
+      text: 'Successfully copied news headline, summary, lead image, and wire link into this story draft!',
+    });
+  };
+
+  const copyToClipboard = (text: string, fieldName: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    setTimeout(() => {
+      setCopiedField(null);
+    }, 2000);
   };
 
   const handleStartEdit = (story: Story) => {
@@ -864,6 +934,151 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
             </div>
           )}
+
+          {/* TOP SECTION: SAVED NEWS SELECTOR & EASY COPY DRAWER */}
+          <div className="bg-[#FAF7FC] border border-[#DA9CFF]/60 rounded-lg p-4 sm:p-5 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <Newspaper className="w-4 h-4 text-[#6A1B9A]" />
+                <h3 className="font-bold text-xs sm:text-sm text-[#1E2229]">
+                  News Reference Desk (Import or Copy from Saved News)
+                </h3>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30">
+                  {savedNewsOptions.length} saved in news table
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdminTab('stocks')}
+                className="text-xs text-[#6A1B9A] hover:underline font-semibold flex items-center gap-1 self-start sm:self-auto"
+              >
+                <span>Browse Market Data Studio</span>
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            </div>
+
+            {/* Dropdown Selector */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="flex-1">
+                <select
+                  value={selectedNewsId}
+                  onChange={(e) => handleSelectNewsForDrafting(e.target.value)}
+                  className="w-full bg-white border border-[#E2E4E8] rounded px-3 py-2 text-xs text-[#1E2229] font-medium focus:border-[#6A1B9A] outline-none"
+                >
+                  <option value="">-- Select a saved news item to display on top --</option>
+                  {savedNewsOptions.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      [{item.source}] {item.title.slice(0, 85)}{item.title.length > 85 ? '...' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedNewsItem && (
+                <button
+                  type="button"
+                  onClick={handleApplyNewsToStory}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white text-xs font-bold transition-all shadow-xs shrink-0"
+                >
+                  <ArrowDownToLine className="w-3.5 h-3.5" />
+                  <span>Autofill Form with this News</span>
+                </button>
+              )}
+            </div>
+
+            {/* Selected News Content Display & Copy Tray */}
+            {selectedNewsItem && (
+              <div className="mt-4 pt-4 border-t border-[#DA9CFF]/40 bg-white rounded-lg p-4 border border-[#E2E4E8]">
+                <div className="flex flex-col md:flex-row gap-4 items-start">
+                  {/* Lead Image */}
+                  <div className="w-full md:w-48 h-32 shrink-0 rounded bg-[#F4F4F6] overflow-hidden border border-[#E2E4E8] relative">
+                    <img
+                      src={selectedNewsItem.image_url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData((prev) => ({ ...prev, lead_image_url: selectedNewsItem.image_url }));
+                        copyToClipboard(selectedNewsItem.image_url, 'image');
+                      }}
+                      className="absolute bottom-1 right-1 px-2 py-1 bg-black/75 hover:bg-black text-white text-[10px] font-bold rounded flex items-center gap-1 backdrop-blur-xs"
+                      title="Use this image in story"
+                    >
+                      {copiedField === 'image' ? <Check className="w-3 h-3 text-[#0E8A54]" /> : <Copy className="w-3 h-3" />}
+                      <span>Use Image</span>
+                    </button>
+                  </div>
+
+                  {/* Texts & Copy Buttons */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FAF7FC] text-[#6A1B9A] border border-[#6A1B9A]/30">
+                          {selectedNewsItem.source}
+                        </span>
+                        <span className="text-[11px] text-[#8A92A0]">
+                          {formatTimeAgo(selectedNewsItem.pub_date)}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(selectedNewsItem.title, 'title')}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F4F4F6] hover:bg-[#E2E4E8] text-[#1E2229] transition-colors"
+                      >
+                        {copiedField === 'title' ? <Check className="w-3 h-3 text-[#0E8A54]" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedField === 'title' ? 'Copied Title!' : 'Copy Title'}</span>
+                      </button>
+                    </div>
+
+                    <h4 className="font-bold text-sm text-[#1E2229] leading-snug">
+                      {selectedNewsItem.title}
+                    </h4>
+
+                    <div className="pt-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold uppercase text-[#8A92A0]">Summary / Body Content:</span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(selectedNewsItem.summary, 'summary')}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F4F4F6] hover:bg-[#E2E4E8] text-[#1E2229] transition-colors"
+                        >
+                          {copiedField === 'summary' ? <Check className="w-3 h-3 text-[#0E8A54]" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedField === 'summary' ? 'Copied Summary!' : 'Copy Summary'}</span>
+                        </button>
+                      </div>
+                      <p className="text-xs text-[#58606E] leading-relaxed bg-[#FAF7FC] p-2.5 rounded border border-[#E2E4E8]">
+                        {selectedNewsItem.summary}
+                      </p>
+                    </div>
+
+                    {selectedNewsItem.url && (
+                      <div className="pt-1 flex items-center justify-between text-[11px]">
+                        <a
+                          href={selectedNewsItem.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[#6A1B9A] hover:underline inline-flex items-center gap-1 font-semibold"
+                        >
+                          <span>Original wire link: {selectedNewsItem.source}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(selectedNewsItem.url, 'url')}
+                          className="text-[#8A92A0] hover:text-[#1E2229] inline-flex items-center gap-1"
+                        >
+                          {copiedField === 'url' ? <Check className="w-3 h-3 text-[#0E8A54]" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedField === 'url' ? 'Copied URL!' : 'Copy URL'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Form Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

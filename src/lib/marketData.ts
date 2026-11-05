@@ -5,7 +5,7 @@
  * Fully replaces stock.indianapi.in.
  */
 
-import { Story, TrendingStockItem, IpoItemRecord } from '../types/story';
+import { Story, TrendingStockItem, IpoItemRecord, NewsItemRecord } from '../types/story';
 import { getSupabaseClient } from './supabase';
 import { countGraphemes, generateCanonicalSlug } from './grapheme';
 
@@ -19,8 +19,8 @@ export interface UnifiedMarketSyncResults {
     topLosers: TrendingStockItem[];
   };
   news: {
-    mergedStoriesCount: number;
-    items: any[];
+    count: number;
+    items: NewsItemRecord[];
   };
   ipo: {
     count: number;
@@ -37,6 +37,7 @@ const LOCAL_STORIES_KEY = 'financial_portal_stories_v1';
 const LOCAL_TRENDING_KEY = 'financial_portal_trending_stocks_v1';
 const LOCAL_IPOS_KEY = 'financial_portal_ipos_v1';
 const LOCAL_STOCK_LOOKUP_KEY = 'financial_portal_stock_lookup_v1';
+const LOCAL_NEWS_KEY = 'financial_portal_news_v1';
 
 // Popular Indian Large-Caps tracked for Gainers & Losers
 const TRACKED_NIFTY_SYMBOLS = [
@@ -75,9 +76,21 @@ export async function executeUnifiedMarketSync(
       apiData = await runClientSideMarketFallback(cleanSymbol);
     }
 
-    // 1. Process News -> Merge into Stories database as 'Draft'
-    const newsArticles = apiData?.news?.items || [];
-    const mergedStoriesCount = await mergeNewsIntoStories(newsArticles);
+    // 1. Process News -> Map to rich NewsItemRecord (Does NOT automatically insert into stories)
+    const rawNews = apiData?.news?.items || [];
+    const newsItems: NewsItemRecord[] = rawNews.map((item: any, i: number) => ({
+      id: item.id || crypto.randomUUID(),
+      title: String(item.title || 'Market Dispatch').trim(),
+      summary: String(item.summary || item.description || item.title || '').trim(),
+      full_content: item.full_content || item.content || item.summary || item.title || '',
+      image_url: item.image_url || 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80',
+      url: item.url || '',
+      source: item.source || 'Market Wire',
+      pub_date: item.pub_date || item.pubDate || now,
+      category: item.category || 'Market Trends',
+      is_saved_to_db: false,
+      created_at: now,
+    }));
 
     // 2. Process Trending -> Save into trending_stocks table (Published)
     const topGainers: TrendingStockItem[] = (apiData?.trending?.topGainers || []).map((g: any, i: number) => ({
@@ -167,8 +180,8 @@ export async function executeUnifiedMarketSync(
         topLosers,
       },
       news: {
-        mergedStoriesCount,
-        items: newsArticles,
+        count: newsItems.length,
+        items: newsItems,
       },
       ipo: {
         count: iposList.length,
@@ -185,7 +198,7 @@ export async function executeUnifiedMarketSync(
       timestamp: now,
       source: 'yahoo-finance-free',
       trending: { count: 0, topGainers: [], topLosers: [] },
-      news: { mergedStoriesCount: 0, items: [] },
+      news: { count: 0, items: [] },
       ipo: { count: 0, items: [] },
       stock: { symbol: cleanSymbol, data: null },
       error: err?.message || 'Failed executing unified sync',
@@ -194,7 +207,84 @@ export async function executeUnifiedMarketSync(
 }
 
 /**
- * Merge ingested market news items into Stories table as 'Draft'
+ * Save selected News item into public.news table and local cache
+ */
+export async function saveNewsItemToDatabase(item: NewsItemRecord): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  const now = new Date().toISOString();
+  const record = {
+    id: item.id || crypto.randomUUID(),
+    title: item.title,
+    summary: item.summary,
+    full_content: item.full_content || item.summary,
+    image_url: item.image_url,
+    url: item.url,
+    source: item.source || 'Market Wire',
+    pub_date: item.pub_date || now,
+    category: item.category || 'Market Trends',
+    created_at: now,
+  };
+
+  let savedToSupabase = false;
+  if (client) {
+    try {
+      const { error } = await client.from('news').upsert(record, { onConflict: 'title' });
+      if (!error) {
+        savedToSupabase = true;
+      } else {
+        console.warn('Supabase news save error:', error.message);
+      }
+    } catch (err: any) {
+      console.warn('Supabase news save exception:', err);
+    }
+  }
+
+  // Backup in localStorage
+  try {
+    const raw = localStorage.getItem(LOCAL_NEWS_KEY);
+    const list: NewsItemRecord[] = raw ? JSON.parse(raw) : [];
+    const idx = list.findIndex((n) => n.title.toLowerCase() === record.title.toLowerCase());
+    const enriched = { ...record, is_saved_to_db: true };
+    if (idx >= 0) {
+      list[idx] = enriched;
+    } else {
+      list.unshift(enriched);
+    }
+    localStorage.setItem(LOCAL_NEWS_KEY, JSON.stringify(list));
+  } catch {}
+
+  return { success: true };
+}
+
+/**
+ * Fetch all saved news from public.news or local backup
+ */
+export async function fetchSavedNews(): Promise<NewsItemRecord[]> {
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      const { data, error } = await client.from('news').select('*').order('created_at', { ascending: false });
+      if (!error && data && data.length > 0) {
+        return data.map((d: any) => ({
+          ...d,
+          is_saved_to_db: true,
+        })) as NewsItemRecord[];
+      }
+    } catch {}
+  }
+
+  try {
+    const raw = localStorage.getItem(LOCAL_NEWS_KEY);
+    if (raw) {
+      return JSON.parse(raw) as NewsItemRecord[];
+    }
+  } catch {}
+
+  return [];
+}
+
+/**
+ * Merge ingested market news items into Stories table as 'Draft' (Optional manual action)
  */
 export async function mergeNewsIntoStories(newsArticles: any[]): Promise<number> {
   if (!Array.isArray(newsArticles) || newsArticles.length === 0) return 0;
@@ -590,32 +680,74 @@ export async function fetchSavedStockData(options?: {
  * and generates live top gainers & losers for Nifty universe.
  */
 async function runClientSideMarketFallback(symbol: string) {
-  // 1. Fetch Real-Time RSS News via CORS-safe JSON proxy
+  // 1. Fetch Real-Time RSS News with full content and live images from top sources (ET, LiveMint, Google News)
   let newsItems: any[] = [];
   try {
-    const rssFeedUrl = 'https://news.google.com/rss/search?q=Indian+Stock+Market+when:1d&hl=en-IN&gl=IN&ceid=IN:en';
-    const rssProxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssFeedUrl)}`;
-    const res = await fetch(rssProxyUrl);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.status === 'ok' && Array.isArray(data.items)) {
-        newsItems = data.items.slice(0, 15).map((item: any) => {
-          const rawTitle = item.title || 'Market Dispatch';
-          const parts = rawTitle.split(' - ');
-          const title = parts.length > 1 ? parts.slice(0, -1).join(' - ') : rawTitle;
-          const source = parts.length > 1 ? parts[parts.length - 1] : 'Market News Desk';
+    const [etFeedRes, mintFeedRes, googleFeedRes] = await Promise.all([
+      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://economictimes.indiatimes.com/markets/stocks/news/rssfeeds/2146842.cms')}`).catch(() => null),
+      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://www.livemint.com/rss/markets')}`).catch(() => null),
+      fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://news.google.com/rss/search?q=Indian+Stock+Market+when:1d&hl=en-IN&gl=IN&ceid=IN:en')}`).catch(() => null),
+    ]);
 
-          return {
-            title,
-            summary: item.description?.replace(/<[^>]*>?/gm, '').trim() || item.content || title,
-            url: item.link || '',
-            source,
-            pub_date: item.pubDate || new Date().toISOString(),
-            image_url: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80',
-            topics: ['Market Trends', 'Markets'],
-          };
-        });
+    const collected: any[] = [];
+    if (etFeedRes && etFeedRes.ok) {
+      const etData = await etFeedRes.json();
+      if (etData.status === 'ok' && Array.isArray(etData.items)) {
+        collected.push(...etData.items.map((it: any) => ({ ...it, defaultSource: 'Economic Times' })));
       }
+    }
+    if (mintFeedRes && mintFeedRes.ok) {
+      const mintData = await mintFeedRes.json();
+      if (mintData.status === 'ok' && Array.isArray(mintData.items)) {
+        collected.push(...mintData.items.map((it: any) => ({ ...it, defaultSource: 'LiveMint' })));
+      }
+    }
+    if (collected.length < 5 && googleFeedRes && googleFeedRes.ok) {
+      const gData = await googleFeedRes.json();
+      if (gData.status === 'ok' && Array.isArray(gData.items)) {
+        collected.push(...gData.items.map((it: any) => ({ ...it, defaultSource: 'Market Desk' })));
+      }
+    }
+
+    const seenTitles = new Set();
+    for (const item of collected) {
+      const rawTitle = item.title || 'Market Dispatch';
+      const parts = rawTitle.split(' - ');
+      const title = parts.length > 1 ? parts.slice(0, -1).join(' - ') : rawTitle;
+      const source = parts.length > 1 ? parts[parts.length - 1] : (item.defaultSource || 'Market News Desk');
+
+      if (seenTitles.has(title.toLowerCase())) continue;
+      seenTitles.add(title.toLowerCase());
+
+      const rawSummary = item.description || item.content || title;
+      const cleanSummary = rawSummary.replace(/<[^>]*>?/gm, '').trim();
+
+      // Extract real image from enclosure, thumbnail, or regex inside HTML description
+      let image_url = item.enclosure?.link || item.thumbnail || '';
+      if (!image_url && typeof item.description === 'string') {
+        const imgMatch = item.description.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (imgMatch) {
+          image_url = imgMatch[1];
+        }
+      }
+      if (!image_url || image_url.length < 5) {
+        image_url = 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
+      }
+
+      newsItems.push({
+        id: crypto.randomUUID(),
+        title,
+        summary: cleanSummary,
+        full_content: cleanSummary,
+        url: item.link || '',
+        source,
+        pub_date: item.pubDate || new Date().toISOString(),
+        image_url,
+        category: 'Market Trends',
+        is_saved_to_db: false,
+      });
+
+      if (newsItems.length >= 20) break;
     }
   } catch (err) {
     console.warn('Real-time RSS fetch fallback warning:', err);

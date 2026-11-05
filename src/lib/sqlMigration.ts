@@ -154,6 +154,35 @@ CREATE POLICY "Editorial staff can manage all stock data"
   USING (true)
   WITH CHECK (true);
 
+-- 8b. Dedicated News Table (Curated Market News saved from Market Data Studio)
+CREATE TABLE IF NOT EXISTS public.news (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  full_content TEXT,
+  image_url TEXT NOT NULL,
+  url TEXT,
+  source TEXT NOT NULL DEFAULT 'Market Wire',
+  pub_date TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'Market Trends',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_news_created_at ON public.news (created_at DESC);
+
+ALTER TABLE public.news ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can view news" ON public.news;
+CREATE POLICY "Public can view news"
+  ON public.news FOR SELECT
+  USING (true);
+
+DROP POLICY IF EXISTS "Editorial staff can manage all news" ON public.news;
+CREATE POLICY "Editorial staff can manage all news"
+  ON public.news FOR ALL
+  USING (true)
+  WITH CHECK (true);
+
 -- 9. Dedicated Trending Stocks Table (Cleared & refreshed on every load)
 CREATE TABLE IF NOT EXISTS public.trending_stocks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
