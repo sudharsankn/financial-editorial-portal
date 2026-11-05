@@ -26,6 +26,12 @@ import {
   ArrowRight,
   ShieldCheck,
   RotateCcw,
+  Globe,
+  Youtube,
+  Facebook,
+  Twitter,
+  Instagram,
+  Linkedin,
 } from 'lucide-react';
 import { formatTimeAgo } from '../lib/timeAgo';
 import { DEFAULT_MARKET_TICKERS } from '../lib/supabase';
@@ -78,6 +84,69 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
   const [activeMarketTab, setActiveMarketTab] = useState<MarketDeskTab>('movers');
   const [moversFilter, setMoversFilter] = useState<MoversFilter>('all');
   const [ipoFilter, setIpoFilter] = useState<IpoFilter>('all');
+
+  // FIND STORIES Filter States
+  const [filterExpanded, setFilterExpanded] = useState<boolean>(true);
+  const [storySearchQuery, setStorySearchQuery] = useState<string>('');
+  const [selectedCategoryTag, setSelectedCategoryTag] = useState<string>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>();
+    stories.forEach((s) => {
+      if (s.category) set.add(s.category);
+    });
+    return Array.from(set);
+  }, [stories]);
+
+  const availableMonths = useMemo(() => {
+    const map = new Map<string, string>();
+    stories.forEach((s) => {
+      const dStr = s.published_at || s.created_at;
+      if (dStr) {
+        const d = new Date(dStr);
+        if (!isNaN(d.getTime())) {
+          const key = dStr.slice(0, 7);
+          const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+          map.set(key, label);
+        }
+      }
+    });
+    return Array.from(map.entries());
+  }, [stories]);
+
+  const displayedStories = useMemo(() => {
+    return stories.filter((story) => {
+      // 1. Text search
+      if (storySearchQuery.trim()) {
+        const q = storySearchQuery.toLowerCase();
+        const matchHead = story.heading.toLowerCase().includes(q);
+        const matchExcerpt = (story.short_description || '').toLowerCase().includes(q);
+        const matchCat = (story.category || '').toLowerCase().includes(q);
+        const matchSec = (story.section || '').toLowerCase().includes(q);
+        const matchKw = (story.keywords || '').toLowerCase().includes(q);
+        if (!matchHead && !matchExcerpt && !matchCat && !matchSec && !matchKw) {
+          return false;
+        }
+      }
+
+      // 2. Category tag filter
+      if (selectedCategoryTag !== 'all' && story.category !== selectedCategoryTag) {
+        return false;
+      }
+
+      // 3. Month filter
+      if (selectedMonth !== 'all') {
+        const dateStr = story.published_at || story.created_at;
+        if (dateStr) {
+          const itemMonth = dateStr.slice(0, 7);
+          if (itemMonth !== selectedMonth) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [stories, storySearchQuery, selectedCategoryTag, selectedMonth]);
 
   const toggleBookmark = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -184,9 +253,142 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* ======================================================== */}
-          {/* 1. LEFT SIDEBAR: Categories Menu (.section-left)          */}
+          {/* 1. LEFT SIDEBAR: FIND STORIES & Categories Menu           */}
           {/* ======================================================== */}
-          <aside className="w-full lg:w-56 xl:w-64 2xl:w-72 shrink-0">
+          <aside className="w-full lg:w-56 xl:w-64 2xl:w-72 shrink-0 space-y-4">
+            {/* FIND STORIES Box (Exact Hedge Ohari Pattern) */}
+            <div className="bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setFilterExpanded(!filterExpanded)}
+                className="w-full p-3.5 bg-[#FAF7FC] hover:bg-[#F3E5F5]/60 transition-colors border-b border-[#E6E6E6] text-left flex items-start justify-between gap-2 cursor-pointer"
+              >
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Search className="w-3.5 h-3.5 text-[#903E97]" />
+                    <h5 className="font-['Open_Sans'] font-extrabold text-xs text-[#262B2E] uppercase tracking-wider">
+                      FIND STORIES
+                    </h5>
+                    {(storySearchQuery || selectedCategoryTag !== 'all' || selectedMonth !== 'all') && (
+                      <span className="w-2 h-2 rounded-full bg-[#903E97]" title="Active filter applied" />
+                    )}
+                  </div>
+                  <p className="text-[10px] text-[#676A6C] leading-normal">
+                    You can find stories by published month, sections and categories.
+                  </p>
+                </div>
+                <div className="text-[#676A6C] p-0.5">
+                  {filterExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </div>
+              </button>
+
+              {filterExpanded && (
+                <div className="p-3.5 space-y-3 bg-white text-xs">
+                  {/* Headline / Keyword Search */}
+                  <div>
+                    <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
+                      Search Headline
+                    </label>
+                    <div className="relative">
+                      <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#878787]" />
+                      <input
+                        type="text"
+                        value={storySearchQuery}
+                        onChange={(e) => setStorySearchQuery(e.target.value)}
+                        placeholder="Search keywords..."
+                        className="w-full pl-7 pr-6 py-1.5 rounded border border-[#E6E6E6] text-xs text-[#262B2E] focus:border-[#903E97] outline-none"
+                      />
+                      {storySearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setStorySearchQuery('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[#878787] hover:text-[#262B2E] text-sm"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Section Filter */}
+                  <div>
+                    <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
+                      Section
+                    </label>
+                    <select
+                      value={selectedSection}
+                      onChange={(e) => onSelectSection(e.target.value)}
+                      className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
+                    >
+                      {navSections.map((sec) => (
+                        <option key={sec.value} value={sec.value}>
+                          {sec.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Category / Tags Filter */}
+                  {availableCategories.length > 0 && (
+                    <div>
+                      <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
+                        Category / Tags
+                      </label>
+                      <select
+                        value={selectedCategoryTag}
+                        onChange={(e) => setSelectedCategoryTag(e.target.value)}
+                        className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
+                      >
+                        <option value="all">All Categories</option>
+                        {availableCategories.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Publishing Month Filter */}
+                  {availableMonths.length > 0 && (
+                    <div>
+                      <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider block mb-1">
+                        Publishing Month
+                      </label>
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(e.target.value)}
+                        className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-2.5 py-1.5 text-xs text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
+                      >
+                        <option value="all">All Months</option>
+                        {availableMonths.map(([key, label]) => (
+                          <option key={key} value={key}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Reset Filters */}
+                  {(storySearchQuery || selectedCategoryTag !== 'all' || selectedMonth !== 'all' || selectedSection !== 'All') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStorySearchQuery('');
+                        setSelectedCategoryTag('all');
+                        setSelectedMonth('all');
+                        onSelectSection('All');
+                      }}
+                      className="w-full py-1.5 text-[11px] font-bold text-[#903E97] bg-[#FAF7FC] hover:bg-[#F3E5F5] rounded border border-[#903E97]/25 transition-colors text-center cursor-pointer"
+                    >
+                      Reset All Filters
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Mobile / Tablet Horizontal Category Scroller */}
             <div className="lg:hidden bg-white rounded border border-[#E6E6E6] p-2 shadow-2xs mb-2">
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
@@ -652,6 +854,47 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
             {/* ======================================================== */}
             {/* B. MAIN EDITORIAL FEED GRID                               */}
             {/* ======================================================== */}
+            {/* Active FIND STORIES Filter Tag Banner */}
+            {(storySearchQuery || selectedCategoryTag !== 'all' || selectedMonth !== 'all') && (
+              <div className="flex items-center justify-between p-2.5 px-3 bg-[#FAF7FC] border border-[#903E97]/25 rounded text-xs text-[#262B2E]">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-[#903E97] uppercase text-[10px] tracking-wider flex items-center gap-1">
+                    <Search className="w-3 h-3" />
+                    FIND STORIES Filter:
+                  </span>
+                  {storySearchQuery && (
+                    <span className="px-2 py-0.5 rounded-full bg-white border border-[#E6E6E6] text-[11px] font-medium">
+                      Keyword: &ldquo;{storySearchQuery}&rdquo;
+                    </span>
+                  )}
+                  {selectedCategoryTag !== 'all' && (
+                    <span className="px-2 py-0.5 rounded-full bg-white border border-[#E6E6E6] text-[11px] font-medium">
+                      Category: {selectedCategoryTag}
+                    </span>
+                  )}
+                  {selectedMonth !== 'all' && (
+                    <span className="px-2 py-0.5 rounded-full bg-white border border-[#E6E6E6] text-[11px] font-medium">
+                      Month: {availableMonths.find(([k]) => k === selectedMonth)?.[1] || selectedMonth}
+                    </span>
+                  )}
+                  <span className="text-[#878787] text-[11px]">
+                    ({displayedStories.length} {displayedStories.length === 1 ? 'story' : 'stories'})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStorySearchQuery('');
+                    setSelectedCategoryTag('all');
+                    setSelectedMonth('all');
+                  }}
+                  className="text-[11px] font-bold text-[#903E97] hover:underline shrink-0"
+                >
+                  Clear Filters
+                </button>
+              </div>
+            )}
+
             {loading ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
@@ -676,9 +919,24 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   View All Stories
                 </button>
               </div>
+            ) : displayedStories.length === 0 ? (
+              <div className="bg-white rounded border border-[#E6E6E6] p-12 text-center text-[#676A6C] space-y-3">
+                <p className="text-sm font-semibold">No stories match your active filter criteria.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStorySearchQuery('');
+                    setSelectedCategoryTag('all');
+                    setSelectedMonth('all');
+                  }}
+                  className="px-4 py-2 rounded bg-[#903E97] text-white text-xs font-bold"
+                >
+                  Clear Filters
+                </button>
+              </div>
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6">
-                {stories.map((story, index) => {
+                {displayedStories.map((story, index) => {
                   const isHero = index === 0;
                   const isSaved = bookmarkedIds.has(story.id);
                   const isCopied = copiedId === story.id;
@@ -928,6 +1186,104 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   ohari@hedgeequities.com
                 </a>
               </div>
+            </div>
+
+            {/* Visit Hedge at Card (Exact Hedge Ohari Pattern) */}
+            <div className="bg-white rounded border border-[#E6E6E6] p-4 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-[#F2F2F2]">
+                <h4 className="font-['Open_Sans'] font-extrabold text-xs text-[#262B2E] uppercase tracking-wider flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-[#903E97]" />
+                  <span>Visit Hedge at</span>
+                </h4>
+                <span className="text-[10px] text-[#878787] font-semibold">Official Channels</span>
+              </div>
+
+              <ul className="space-y-1.5 text-xs">
+                <li>
+                  <a
+                    href="https://hedgeequities.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between p-2 rounded hover:bg-[#FAF7FC] text-[#262B2E] hover:text-[#903E97] transition-colors border border-transparent hover:border-[#903E97]/20 group"
+                  >
+                    <span className="flex items-center gap-2 font-semibold text-[11px]">
+                      <Globe className="w-3.5 h-3.5 text-[#903E97]" />
+                      <span>hedgeequities.com</span>
+                    </span>
+                    <ExternalLink className="w-3 h-3 text-[#878787] group-hover:text-[#903E97]" />
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.youtube.com/@hedgeequitiesltd"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between p-2 rounded hover:bg-[#FAF7FC] text-[#262B2E] hover:text-[#E62117] transition-colors border border-transparent hover:border-[#E62117]/20 group"
+                  >
+                    <span className="flex items-center gap-2 font-semibold text-[11px]">
+                      <Youtube className="w-3.5 h-3.5 text-[#E62117]" />
+                      <span>Youtube</span>
+                    </span>
+                    <ExternalLink className="w-3 h-3 text-[#878787] group-hover:text-[#E62117]" />
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.facebook.com/hedgeequities/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between p-2 rounded hover:bg-[#FAF7FC] text-[#262B2E] hover:text-[#1877F2] transition-colors border border-transparent hover:border-[#1877F2]/20 group"
+                  >
+                    <span className="flex items-center gap-2 font-semibold text-[11px]">
+                      <Facebook className="w-3.5 h-3.5 text-[#1877F2]" />
+                      <span>Facebook</span>
+                    </span>
+                    <ExternalLink className="w-3 h-3 text-[#878787] group-hover:text-[#1877F2]" />
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://twitter.com/hedge_equities"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between p-2 rounded hover:bg-[#FAF7FC] text-[#262B2E] hover:text-[#1D9BF0] transition-colors border border-transparent hover:border-[#1D9BF0]/20 group"
+                  >
+                    <span className="flex items-center gap-2 font-semibold text-[11px]">
+                      <Twitter className="w-3.5 h-3.5 text-[#1D9BF0]" />
+                      <span>Twitter</span>
+                    </span>
+                    <ExternalLink className="w-3 h-3 text-[#878787] group-hover:text-[#1D9BF0]" />
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.instagram.com/hedgeequities/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between p-2 rounded hover:bg-[#FAF7FC] text-[#262B2E] hover:text-[#E1306C] transition-colors border border-transparent hover:border-[#E1306C]/20 group"
+                  >
+                    <span className="flex items-center gap-2 font-semibold text-[11px]">
+                      <Instagram className="w-3.5 h-3.5 text-[#E1306C]" />
+                      <span>Instagram</span>
+                    </span>
+                    <ExternalLink className="w-3 h-3 text-[#878787] group-hover:text-[#E1306C]" />
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.linkedin.com/company/hedge-equities/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between p-2 rounded hover:bg-[#FAF7FC] text-[#262B2E] hover:text-[#0A66C2] transition-colors border border-transparent hover:border-[#0A66C2]/20 group"
+                  >
+                    <span className="flex items-center gap-2 font-semibold text-[11px]">
+                      <Linkedin className="w-3.5 h-3.5 text-[#0A66C2]" />
+                      <span>LinkedIn</span>
+                    </span>
+                    <ExternalLink className="w-3 h-3 text-[#878787] group-hover:text-[#0A66C2]" />
+                  </a>
+                </li>
+              </ul>
             </div>
           </aside>
         </div>
