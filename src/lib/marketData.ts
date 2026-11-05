@@ -774,13 +774,28 @@ async function runClientSideMarketFallback(symbol: string) {
       const cleanSummary = rawSummary.replace(/<[^>]*>?/gm, '').trim();
 
       // Extract real image from enclosure, thumbnail, or regex inside HTML description
-      let image_url = item.enclosure?.link || item.thumbnail || '';
+      let image_url = '';
+      if (item.enclosure && item.enclosure.link) {
+        image_url = item.enclosure.link;
+      } else if (item.enclosure && item.enclosure.url) {
+        image_url = item.enclosure.url;
+      } else if (typeof item.thumbnail === 'string' && item.thumbnail.length > 5) {
+        image_url = item.thumbnail;
+      }
+
       if (!image_url && typeof item.description === 'string') {
         const imgMatch = item.description.match(/<img[^>]+src=["']([^"']+)["']/i);
-        if (imgMatch) {
+        if (imgMatch && imgMatch[1] && imgMatch[1].startsWith('http')) {
           image_url = imgMatch[1];
         }
       }
+      if (!image_url && typeof item.content === 'string') {
+        const imgMatch = item.content.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (imgMatch && imgMatch[1] && imgMatch[1].startsWith('http')) {
+          image_url = imgMatch[1];
+        }
+      }
+
       if (!image_url || image_url.length < 5) {
         image_url = 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
       }

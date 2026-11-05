@@ -32,10 +32,10 @@ function scrapeArticleText(targetUrl: string): Promise<string[]> {
         {
           headers: {
             'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           },
-          timeout: 5000,
+          timeout: 6000,
         },
         (res) => {
           if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -44,12 +44,11 @@ function scrapeArticleText(targetUrl: string): Promise<string[]> {
           let data = '';
           res.on('data', (chunk) => (data += chunk));
           res.on('end', () => {
-            const clean = data
+            const cleanHtml = data
               .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-              .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-            const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
-            let match;
-            const paragraphs: string[] = [];
+              .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+              .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
+
             const bannedSnippets = [
               'subscribe',
               'copyright',
@@ -63,9 +62,50 @@ function scrapeArticleText(targetUrl: string): Promise<string[]> {
               'sign in',
               'log in',
               'opt-out',
+              'report button',
+              'click here',
             ];
 
-            while ((match = pRegex.exec(clean)) !== null) {
+            // 1. Check for targeted article body container (ET, Mint, BS, Reuters, NDTV)
+            const containerMatches = [
+              cleanHtml.match(/class="[^"]*(?:artText|story-content|storyContent|storyBody|article-body|content__article|main-article|articlePage)[^"]*"[^>]*>([\s\S]*?)<\/div>/i),
+              cleanHtml.match(/<article[^>]*>([\s\S]*?)<\/article>/i),
+            ];
+
+            let targetBlock = '';
+            for (const cm of containerMatches) {
+              if (cm && cm[1] && cm[1].length > 200) {
+                targetBlock = cm[1];
+                break;
+              }
+            }
+
+            if (targetBlock) {
+              let chunks: string[] = [];
+              if (targetBlock.includes('<p')) {
+                const pMatches = targetBlock.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi);
+                for (const m of pMatches) chunks.push(m[1]);
+              } else {
+                chunks = targetBlock.split(/<br\s*\/?>\s*<br\s*\/?>/i);
+              }
+
+              const paragraphs: string[] = [];
+              for (const raw of chunks) {
+                const text = raw.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+                if (text.length > 40 && !bannedSnippets.some(b => text.toLowerCase().includes(b))) {
+                  paragraphs.push(text);
+                }
+              }
+              if (paragraphs.length >= 2) {
+                return resolve(paragraphs);
+              }
+            }
+
+            // 2. Fallback: collect global clean <p> tags
+            const paragraphs: string[] = [];
+            const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+            let match;
+            while ((match = pRegex.exec(cleanHtml)) !== null) {
               const text = match[1]
                 .replace(/<[^>]+>/g, '')
                 .replace(/&nbsp;/g, ' ')
@@ -90,9 +130,61 @@ function scrapeArticleText(targetUrl: string): Promise<string[]> {
   });
 }
 
+function extractFeedImageUrl(item: any): string {
+  // 1. Direct enclosure url
+  if (item.enclosure) {
+    if (typeof item.enclosure === 'string') return item.enclosure;
+    if (item.enclosure.url) return item.enclosure.url;
+    if (item.enclosure.link) return item.enclosure.link;
+  }
+  // 2. Media content (LiveMint, Business Standard, Yahoo)
+  if (item.mediaContent && Array.isArray(item.mediaContent)) {
+    for (const mc of item.mediaContent) {
+      if (mc && mc['$'] && mc['$'].url) return mc['$'].url;
+    }
+  }
+  if (item['media:content'] && Array.isArray(item['media:content'])) {
+    for (const mc of item['media:content']) {
+      if (mc && mc['$'] && mc['$'].url) return mc['$'].url;
+    }
+  }
+  // 3. Media thumbnail
+  if (item.mediaThumbnail && Array.isArray(item.mediaThumbnail)) {
+    for (const mt of item.mediaThumbnail) {
+      if (mt && mt['$'] && mt['$'].url) return mt['$'].url;
+    }
+  }
+  if (item['media:thumbnail'] && Array.isArray(item['media:thumbnail'])) {
+    for (const mt of item['media:thumbnail']) {
+      if (mt && mt['$'] && mt['$'].url) return mt['$'].url;
+    }
+  }
+  // 4. String thumbnail
+  if (typeof item.thumbnail === 'string' && item.thumbnail.length > 5) {
+    return item.thumbnail;
+  }
+  // 5. Inlined <img> tag in HTML content or description
+  const htmlBlob = `${item.content || ''} ${item.description || ''}`;
+  if (htmlBlob.includes('<img')) {
+    const m = htmlBlob.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (m && m[1] && m[1].startsWith('http')) {
+      return m[1];
+    }
+  }
+  return '';
+}
+
 function marketDataDevPlugin(): Plugin {
   const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-  const rssParser = new Parser();
+  const rssParser = new Parser({
+    customFields: {
+      item: [
+        ['media:content', 'mediaContent', { keepArray: true }],
+        ['media:thumbnail', 'mediaThumbnail', { keepArray: true }],
+        ['enclosure', 'enclosure'],
+      ],
+    },
+  });
 
   return {
     name: 'vite-plugin-market-data-dev',
@@ -224,11 +316,7 @@ function marketDataDevPlugin(): Plugin {
 
               const cleanSummary = (item.contentSnippet || item.content || item.summary || title).replace(/<[^>]*>?/gm, '').trim();
 
-              let image_url = item.enclosure?.url || item.thumbnail || '';
-              if (!image_url && typeof item.content === 'string') {
-                const m = item.content.match(/<img[^>]+src=["']([^"']+)["']/i);
-                if (m) image_url = m[1];
-              }
+              let image_url = extractFeedImageUrl(item);
               if (!image_url || image_url.length < 5) {
                 image_url = 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=560&h=320&q=80';
               }
