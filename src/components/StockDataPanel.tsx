@@ -122,7 +122,7 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
               </span>
             </div>
             <p className="text-xs text-[#58606E]">
-              Captures live data in a single click: /news into Stories (Draft), /trending, /ipo, and /stock (Published) powered by Yahoo Finance and Real-Time RSS.
+              Captures live market data in a single click: /news into Stories (Draft), /trending (Gainers &amp; Losers), and /ipo (Published) powered by Yahoo Finance and Real-Time RSS.
             </p>
           </div>
 
@@ -144,27 +144,13 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
         </div>
 
         {/* 1-Click Action Bar */}
-        <div className="pt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-[#1E2229] uppercase tracking-wide">
-              Company Symbol for /stock:
-            </span>
-            <input
-              type="text"
-              value={syncStockSymbol}
-              onChange={(e) => setSyncStockSymbol(e.target.value.toUpperCase())}
-              placeholder="e.g. RELIANCE, TCS, INFY"
-              className="px-3 py-1.5 text-xs font-mono font-bold bg-[#F4F4F6] border border-[#E2E4E8] rounded focus:border-[#6A1B9A] outline-none uppercase w-36"
-            />
-            <span className="text-[11px] text-[#8A92A0]">Default: RELIANCE</span>
-          </div>
-
+        <div className="pt-4 flex items-center justify-end">
           <button
             id="btn-fetch-unified-data"
             type="button"
             onClick={handleSingleClickFetch}
             disabled={syncing}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white text-xs font-bold transition-all shadow-sm hover:shadow disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white text-xs font-bold transition-all shadow-sm hover:shadow disabled:opacity-50"
           >
             {syncing ? (
               <>
@@ -244,7 +230,7 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
             }`}
           >
             <Building2 className="w-4 h-4 text-[#6A1B9A]" />
-            <span>Company Lookup ({syncStockSymbol})</span>
+            <span>Company Lookup</span>
           </button>
         </div>
 
@@ -515,7 +501,7 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
               <div>
                 <h3 className="font-bold text-sm text-[#1E2229] flex items-center gap-1.5">
                   <Building2 className="w-4 h-4 text-[#6A1B9A]" />
-                  <span>Company Fundamental Dossier ({syncStockSymbol})</span>
+                  <span>Company Fundamental Dossier</span>
                 </h3>
                 <p className="text-xs text-[#58606E]">
                   Saved in <code className="text-xs font-mono">public.indian_stock_data</code> • Published • Powered by Yahoo Finance
