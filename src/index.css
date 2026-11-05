@@ -57,3 +57,40 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #6a1b9a;
 }
+
+/* ==============================================================================
+   Continuous Smooth Financial Marquee Ticker
+   ============================================================================== */
+@keyframes tickerSlide {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-ticker {
+  display: flex;
+  width: max-content;
+  animation: tickerSlide 45s linear infinite;
+  will-change: transform;
+}
+
+.animate-ticker:hover {
+  animation-play-state: paused;
+}
+
+/* Pause animation button override */
+.ticker-paused .animate-ticker {
+  animation-play-state: paused;
+}
+
+/* Utility to hide native scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

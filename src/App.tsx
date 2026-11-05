@@ -19,6 +19,7 @@ import { HedgeNavbar } from './components/HedgeNavbar';
 import { HedgeDrawer } from './components/HedgeDrawer';
 import { HedgeHomePage } from './components/HedgeHomePage';
 import { HedgeFooter } from './components/HedgeFooter';
+import { MarketTicker } from './components/MarketTicker';
 import { ArticleDetail } from './components/ArticleDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { SupabaseGuideModal } from './components/SupabaseGuideModal';
@@ -240,7 +241,22 @@ export default function App() {
         }}
       />
 
-      {/* 2. Slide-out Navigation Drawer (.aside-menu-container) */}
+      {/* 2. Top Live Scrolling Market Index, Movers & Upcoming IPO Ticker */}
+      {currentView !== 'admin' && (
+        <MarketTicker
+          tickers={marketTickers}
+          trendingStocks={publishedTrendingStocks}
+          ipos={publishedIpos}
+          onOpenAdminMarkets={() => {
+            setAdminTab('markets');
+            handleNavigate('admin');
+          }}
+          onSelectCategory={(sec) => setSelectedSection(sec)}
+          onOpenIpoWatch={() => setSelectedSection('IPO Watch')}
+        />
+      )}
+
+      {/* 3. Slide-out Navigation Drawer (.aside-menu-container) */}
       <HedgeDrawer
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -258,9 +274,9 @@ export default function App() {
         onOpenAdmin={() => handleNavigate('admin')}
       />
 
-      {/* 3. Main Views */}
+      {/* 4. Main Views */}
       <main className="flex-1">
-        {/* VIEW A: HEDGE OHARI EXACT HOMEPAGE (Left Categories, Center Grid, Right Subscription Box) */}
+        {/* VIEW A: HEDGE OHARI EXACT HOMEPAGE (Left Categories, Center Grid + Market Desk, Right Subscription Box) */}
         {currentView === 'feed' && (
           <HedgeHomePage
             stories={publishedStories}
@@ -269,6 +285,13 @@ export default function App() {
             onSelectSection={setSelectedSection}
             onSelectStory={handleSelectStory}
             onOpenSubscribe={() => window.open('https://hedgeohari.com/subscribe', '_blank')}
+            marketTickers={marketTickers}
+            trendingStocks={publishedTrendingStocks}
+            ipos={publishedIpos}
+            onSearchSymbol={(sym) => {
+              setSearchQuery(sym);
+              if (currentView !== 'feed') setCurrentView('feed');
+            }}
           />
         )}
 

@@ -424,6 +424,131 @@ export async function saveTrendingStocksToDedicatedTable(
   return trendingStocks.length;
 }
 
+const nowTimestamp = new Date().toISOString();
+
+export const DEFAULT_TRENDING_STOCKS: TrendingStockItem[] = [
+  {
+    id: 'trend-1',
+    ticker_id: 'TATAMOTORS',
+    company_name: 'Tata Motors Limited',
+    price: '984.50',
+    percent_change: '+3.40%',
+    net_change: '+32.40',
+    trend_type: 'gainer',
+    volume: '14.2M',
+    section: 'Market News',
+    category: 'Top Movers',
+    is_published: true,
+    display_order: 1,
+    fetched_at: nowTimestamp,
+  },
+  {
+    id: 'trend-2',
+    ticker_id: 'HDFCBANK',
+    company_name: 'HDFC Bank Limited',
+    price: '1,742.80',
+    percent_change: '+1.67%',
+    net_change: '+28.60',
+    trend_type: 'gainer',
+    volume: '22.8M',
+    section: 'Market News',
+    category: 'Top Movers',
+    is_published: true,
+    display_order: 2,
+    fetched_at: nowTimestamp,
+  },
+  {
+    id: 'trend-3',
+    ticker_id: 'RELIANCE',
+    company_name: 'Reliance Industries Limited',
+    price: '2,985.20',
+    percent_change: '+1.40%',
+    net_change: '+41.10',
+    trend_type: 'gainer',
+    volume: '8.4M',
+    section: 'Market News',
+    category: 'Top Movers',
+    is_published: true,
+    display_order: 3,
+    fetched_at: nowTimestamp,
+  },
+  {
+    id: 'trend-4',
+    ticker_id: 'INFY',
+    company_name: 'Infosys Limited',
+    price: '1,892.40',
+    percent_change: '+1.89%',
+    net_change: '+35.20',
+    trend_type: 'gainer',
+    volume: '9.6M',
+    section: 'Market News',
+    category: 'Top Movers',
+    is_published: true,
+    display_order: 4,
+    fetched_at: nowTimestamp,
+  },
+  {
+    id: 'trend-5',
+    ticker_id: 'BHARTIARTL',
+    company_name: 'Bharti Airtel Limited',
+    price: '1,680.15',
+    percent_change: '+1.47%',
+    net_change: '+24.30',
+    trend_type: 'gainer',
+    volume: '6.1M',
+    section: 'Market News',
+    category: 'Top Movers',
+    is_published: true,
+    display_order: 5,
+    fetched_at: nowTimestamp,
+  },
+  {
+    id: 'trend-6',
+    ticker_id: 'WIPRO',
+    company_name: 'Wipro Limited',
+    price: '542.10',
+    percent_change: '-1.78%',
+    net_change: '-9.80',
+    trend_type: 'loser',
+    volume: '11.3M',
+    section: 'Market News',
+    category: 'Top Movers',
+    is_published: true,
+    display_order: 6,
+    fetched_at: nowTimestamp,
+  },
+  {
+    id: 'trend-7',
+    ticker_id: 'TITAN',
+    company_name: 'Titan Company Limited',
+    price: '3,420.50',
+    percent_change: '-1.30%',
+    net_change: '-45.20',
+    trend_type: 'loser',
+    volume: '2.5M',
+    section: 'Market News',
+    category: 'Top Movers',
+    is_published: true,
+    display_order: 7,
+    fetched_at: nowTimestamp,
+  },
+  {
+    id: 'trend-8',
+    ticker_id: 'BAJFINANCE',
+    company_name: 'Bajaj Finance Limited',
+    price: '7,120.00',
+    percent_change: '-1.23%',
+    net_change: '-88.40',
+    trend_type: 'loser',
+    volume: '1.9M',
+    section: 'Market News',
+    category: 'Top Movers',
+    is_published: true,
+    display_order: 8,
+    fetched_at: nowTimestamp,
+  },
+];
+
 /**
  * Fetch Trending Stocks
  */
@@ -449,11 +574,15 @@ export async function fetchTrendingStocks(publishedOnly: boolean = false): Promi
     const raw = localStorage.getItem(LOCAL_TRENDING_KEY);
     if (raw) {
       const list: TrendingStockItem[] = JSON.parse(raw);
-      return publishedOnly ? list.filter((i) => i.is_published) : list;
+      if (Array.isArray(list) && list.length > 0) {
+        return publishedOnly ? list.filter((i) => i.is_published) : list;
+      }
     }
   } catch {}
 
-  return [];
+  return publishedOnly
+    ? DEFAULT_TRENDING_STOCKS.filter((i) => i.is_published)
+    : DEFAULT_TRENDING_STOCKS;
 }
 
 /**

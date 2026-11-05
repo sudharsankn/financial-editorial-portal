@@ -1,7 +1,34 @@
-import React, { useState } from 'react';
-import { Story, SECTIONS } from '../types/story';
-import { Bookmark, Share2, Clock, Check, ArrowRight } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import {
+  Story,
+  SECTIONS,
+  MarketTickerItem,
+  TrendingStockItem,
+  IpoItemRecord,
+} from '../types/story';
+import {
+  Bookmark,
+  Share2,
+  Clock,
+  Check,
+  TrendingUp,
+  TrendingDown,
+  Flame,
+  Rocket,
+  Activity,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  ExternalLink,
+  Calendar,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+} from 'lucide-react';
 import { formatTimeAgo } from '../lib/timeAgo';
+import { DEFAULT_MARKET_TICKERS } from '../lib/supabase';
+import { DEFAULT_TRENDING_STOCKS } from '../lib/marketData';
 
 interface HedgeHomePageProps {
   stories: Story[];
@@ -10,7 +37,15 @@ interface HedgeHomePageProps {
   onSelectSection: (sec: string) => void;
   onSelectStory: (canonicalUrl: string) => void;
   onOpenSubscribe: () => void;
+  marketTickers?: MarketTickerItem[];
+  trendingStocks?: TrendingStockItem[];
+  ipos?: IpoItemRecord[];
+  onSearchSymbol?: (symbol: string) => void;
 }
+
+type MarketDeskTab = 'indices' | 'movers' | 'ipos';
+type MoversFilter = 'all' | 'gainers' | 'losers';
+type IpoFilter = 'all' | 'active' | 'upcoming';
 
 export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
   stories,
@@ -19,6 +54,10 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
   onSelectSection,
   onSelectStory,
   onOpenSubscribe,
+  marketTickers = [],
+  trendingStocks = [],
+  ipos = [],
+  onSearchSymbol,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(() => {
@@ -29,6 +68,12 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
       return new Set();
     }
   });
+
+  // Market Desk State
+  const [deskExpanded, setDeskExpanded] = useState<boolean>(true);
+  const [activeMarketTab, setActiveMarketTab] = useState<MarketDeskTab>('movers');
+  const [moversFilter, setMoversFilter] = useState<MoversFilter>('all');
+  const [ipoFilter, setIpoFilter] = useState<IpoFilter>('all');
 
   const toggleBookmark = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -63,6 +108,49 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
     { label: 'IPO Watch', value: 'IPO Watch' },
   ];
 
+  // Effective Datasets with Fallbacks
+  const effectiveIndices =
+    marketTickers.length > 0 ? marketTickers.filter((t) => t.is_active) : DEFAULT_MARKET_TICKERS;
+
+  const effectiveTrending =
+    trendingStocks.length > 0 ? trendingStocks : DEFAULT_TRENDING_STOCKS;
+
+  // Filtered Movers
+  const filteredMovers = useMemo(() => {
+    if (moversFilter === 'gainers') {
+      return effectiveTrending.filter((s) => s.trend_type === 'gainer');
+    }
+    if (moversFilter === 'losers') {
+      return effectiveTrending.filter((s) => s.trend_type === 'loser');
+    }
+    return effectiveTrending;
+  }, [effectiveTrending, moversFilter]);
+
+  // Filtered IPOs
+  const filteredIpos = useMemo(() => {
+    if (ipoFilter === 'active') {
+      return ipos.filter((i) => i.status === 'active');
+    }
+    if (ipoFilter === 'upcoming') {
+      return ipos.filter((i) => i.status === 'upcoming');
+    }
+    return ipos;
+  }, [ipos, ipoFilter]);
+
+  // Top Gainer and Top Loser for Fast Glance
+  const topGainer = useMemo(
+    () => effectiveTrending.find((s) => s.trend_type === 'gainer'),
+    [effectiveTrending]
+  );
+  const topLoser = useMemo(
+    () => effectiveTrending.find((s) => s.trend_type === 'loser'),
+    [effectiveTrending]
+  );
+  const featuredIpo = useMemo(
+    () => ipos.find((i) => i.status === 'active') || ipos[0],
+    [ipos]
+  );
+
   // Strip rich text HTML safely for grid preview
   const getExcerpt = (html: string) => {
     return html.replace(/<[^>]+>/g, '').trim();
@@ -77,10 +165,11 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
           {/* ======================================================== */}
           <aside className="w-full lg:w-56 shrink-0">
             <div className="bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden sticky top-20">
-              <div className="p-3.5 bg-[#FAF7FC] border-b border-[#E6E6E6]">
+              <div className="p-3.5 bg-[#FAF7FC] border-b border-[#E6E6E6] flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[#903E97]">
                   Categories
                 </span>
+                <span className="w-2 h-2 rounded-full bg-[#0E8A54] animate-pulse" />
               </div>
               <ul className="divide-y divide-[#F2F2F2]">
                 {navSections.map((sec) => {
@@ -89,14 +178,24 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                     <li key={sec.value}>
                       <button
                         type="button"
-                        onClick={() => onSelectSection(sec.value)}
+                        onClick={() => {
+                          onSelectSection(sec.value);
+                          if (sec.value === 'IPO Watch') {
+                            setActiveMarketTab('ipos');
+                            setDeskExpanded(true);
+                          }
+                        }}
                         className={`w-full text-left px-4 py-3 text-xs font-semibold tracking-wide transition-colors flex items-center justify-between ${
                           isActive
                             ? 'bg-[#903E97] text-white font-bold'
                             : 'text-[#262B2E] hover:bg-[#FAF7FC] hover:text-[#903E97]'
                         }`}
                       >
-                        <span>{sec.label}</span>
+                        <span className="flex items-center gap-2">
+                          {sec.value === 'IPO Watch' && <Rocket className="w-3.5 h-3.5" />}
+                          {sec.value === 'Market News' && <Activity className="w-3.5 h-3.5" />}
+                          {sec.label}
+                        </span>
                         {isActive && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                       </button>
                     </li>
@@ -124,9 +223,366 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
           </aside>
 
           {/* ======================================================== */}
-          {/* 2. CENTER FEED: Main Editorial Grid (.section-main)       */}
+          {/* 2. CENTER FEED: Main Editorial Grid + Market Hub          */}
           {/* ======================================================== */}
-          <main className="flex-1 min-w-0">
+          <main className="flex-1 min-w-0 space-y-5">
+            {/* ======================================================== */}
+            {/* A. EXECUTIVE LIVE MARKET DESK (Movers, IPOs, Indices)     */}
+            {/* ======================================================== */}
+            <section className="bg-white rounded border border-[#E6E6E6] shadow-2xs overflow-hidden transition-all duration-200">
+              {/* Header Bar with Live Badge & View Selector */}
+              <div className="p-3 sm:p-4 bg-[#FAF7FC] border-b border-[#E6E6E6] flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#0E8A54]/10 text-[#0E8A54] border border-[#0E8A54]/25 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#0E8A54] animate-pulse" />
+                    Market Pulse
+                  </span>
+                  <span className="text-xs font-bold text-[#262B2E] hidden sm:inline">
+                    Live NSE &bull; BSE Terminal
+                  </span>
+                </div>
+
+                {/* Desk Switcher Tabs */}
+                <div className="flex items-center gap-1 bg-white p-1 rounded-md border border-[#E6E6E6]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveMarketTab('movers');
+                      setDeskExpanded(true);
+                    }}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1 ${
+                      activeMarketTab === 'movers' && deskExpanded
+                        ? 'bg-[#903E97] text-white shadow-xs'
+                        : 'text-[#676A6C] hover:text-[#262B2E]'
+                    }`}
+                  >
+                    <Flame className="w-3.5 h-3.5 text-[#E65100]" />
+                    <span>Top Movers</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveMarketTab('ipos');
+                      setDeskExpanded(true);
+                    }}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1 ${
+                      activeMarketTab === 'ipos' && deskExpanded
+                        ? 'bg-[#903E97] text-white shadow-xs'
+                        : 'text-[#676A6C] hover:text-[#262B2E]'
+                    }`}
+                  >
+                    <Rocket className="w-3.5 h-3.5 text-[#903E97]" />
+                    <span>Upcoming IPOs</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveMarketTab('indices');
+                      setDeskExpanded(true);
+                    }}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1 ${
+                      activeMarketTab === 'indices' && deskExpanded
+                        ? 'bg-[#903E97] text-white shadow-xs'
+                        : 'text-[#676A6C] hover:text-[#262B2E]'
+                    }`}
+                  >
+                    <Activity className="w-3.5 h-3.5 text-[#0E8A54]" />
+                    <span>Live Indices</span>
+                  </button>
+                </div>
+
+                {/* Minimize / Expand Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setDeskExpanded(!deskExpanded)}
+                  className="text-xs font-semibold text-[#676A6C] hover:text-[#903E97] flex items-center gap-1 transition-colors"
+                  title={deskExpanded ? 'Minimize Market Desk' : 'Expand Market Desk'}
+                >
+                  <span className="hidden md:inline">{deskExpanded ? 'Hide' : 'Show'}</span>
+                  {deskExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* Collapsible Content Area */}
+              {deskExpanded && (
+                <div className="p-4 sm:p-5">
+                  {/* TAB 1: TOP MOVERS & TRENDING STOCKS */}
+                  {activeMarketTab === 'movers' && (
+                    <div className="space-y-3.5">
+                      {/* Filter sub-strip */}
+                      <div className="flex items-center justify-between pb-2.5 border-b border-[#F2F2F2]">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setMoversFilter('all')}
+                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
+                              moversFilter === 'all'
+                                ? 'bg-[#262B2E] text-white'
+                                : 'bg-[#F2F2F2] text-[#676A6C] hover:text-[#262B2E]'
+                            }`}
+                          >
+                            All Movers ({effectiveTrending.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMoversFilter('gainers')}
+                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 ${
+                              moversFilter === 'gainers'
+                                ? 'bg-[#0E8A54] text-white'
+                                : 'bg-[#E8F5EE] text-[#0E8A54] hover:bg-[#d5eee0]'
+                            }`}
+                          >
+                            <TrendingUp className="w-3 h-3" />
+                            Gainers
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMoversFilter('losers')}
+                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 ${
+                              moversFilter === 'losers'
+                                ? 'bg-[#D32F2F] text-white'
+                                : 'bg-[#FDECEC] text-[#D32F2F] hover:bg-[#fad4d4]'
+                            }`}
+                          >
+                            <TrendingDown className="w-3 h-3" />
+                            Losers
+                          </button>
+                        </div>
+                        <span className="text-[10px] text-[#878787] hidden sm:inline">
+                          Prices update in real time
+                        </span>
+                      </div>
+
+                      {/* Stock Cards Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {filteredMovers.slice(0, 8).map((stock) => {
+                          const isGainer = stock.trend_type === 'gainer';
+                          const symbol = stock.ticker_id || stock.company_name;
+                          const priceFormatted = String(stock.price).startsWith('₹')
+                            ? stock.price
+                            : `₹${stock.price}`;
+
+                          return (
+                            <div
+                              key={stock.id}
+                              className="p-3 rounded border border-[#E6E6E6] bg-[#FAF7FC]/50 hover:bg-white hover:border-[#903E97]/40 hover:shadow-2xs transition-all duration-150 flex flex-col justify-between"
+                            >
+                              <div className="flex items-start justify-between gap-1 mb-1.5">
+                                <div>
+                                  <span className="font-extrabold text-xs text-[#262B2E] tracking-tight block">
+                                    {symbol}
+                                  </span>
+                                  <span className="text-[10px] text-[#676A6C] line-clamp-1">
+                                    {stock.company_name}
+                                  </span>
+                                </div>
+                                <span
+                                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold tabular-nums shrink-0 ${
+                                    isGainer
+                                      ? 'bg-[#E8F5EE] text-[#0E8A54]'
+                                      : 'bg-[#FDECEC] text-[#D32F2F]'
+                                  }`}
+                                >
+                                  {isGainer ? (
+                                    <TrendingUp className="w-2.5 h-2.5" />
+                                  ) : (
+                                    <TrendingDown className="w-2.5 h-2.5" />
+                                  )}
+                                  {stock.percent_change}
+                                </span>
+                              </div>
+
+                              <div className="pt-2 border-t border-[#F2F2F2] flex items-center justify-between mt-auto">
+                                <span className="tabular-nums font-bold text-xs text-[#262B2E]">
+                                  {priceFormatted}
+                                </span>
+
+                                {onSearchSymbol && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onSearchSymbol(symbol)}
+                                    title={`Filter news for ${symbol}`}
+                                    className="p-1 rounded text-[#878787] hover:text-[#903E97] hover:bg-[#FAF7FC] transition-colors"
+                                  >
+                                    <Search className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 2: UPCOMING & ACTIVE IPOS */}
+                  {activeMarketTab === 'ipos' && (
+                    <div className="space-y-3.5">
+                      {/* Filter sub-strip */}
+                      <div className="flex items-center justify-between pb-2.5 border-b border-[#F2F2F2]">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setIpoFilter('all')}
+                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
+                              ipoFilter === 'all'
+                                ? 'bg-[#903E97] text-white'
+                                : 'bg-[#F2F2F2] text-[#676A6C] hover:text-[#262B2E]'
+                            }`}
+                          >
+                            All IPOs ({ipos.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIpoFilter('active')}
+                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 ${
+                              ipoFilter === 'active'
+                                ? 'bg-[#0E8A54] text-white'
+                                : 'bg-[#E8F5EE] text-[#0E8A54] hover:bg-[#d5eee0]'
+                            }`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#0E8A54]" />
+                            Open Now
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIpoFilter('upcoming')}
+                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors flex items-center gap-1 ${
+                              ipoFilter === 'upcoming'
+                                ? 'bg-[#E65100] text-white'
+                                : 'bg-[#FFF3E0] text-[#E65100] hover:bg-[#ffe6cc]'
+                            }`}
+                          >
+                            <Calendar className="w-3 h-3" />
+                            Upcoming Pipeline
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => onSelectSection('IPO Watch')}
+                          className="text-[11px] font-bold text-[#903E97] hover:underline flex items-center gap-0.5"
+                        >
+                          <span>Explore IPO Editorial</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      {/* IPO Cards Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {filteredIpos.slice(0, 6).map((ipo) => {
+                          const isOpen = ipo.status === 'active';
+                          const isUpcoming = ipo.status === 'upcoming';
+                          const priceDisplay =
+                            ipo.min_price && ipo.max_price && ipo.min_price !== ipo.max_price
+                              ? `₹${ipo.min_price} - ₹${ipo.max_price}`
+                              : `₹${ipo.issue_price || ipo.max_price || 0}`;
+
+                          return (
+                            <div
+                              key={ipo.id}
+                              className="p-3.5 rounded border border-[#E6E6E6] bg-white hover:border-[#903E97]/40 hover:shadow-2xs transition-all flex flex-col justify-between"
+                            >
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <div>
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <span className="font-extrabold text-xs text-[#262B2E]">
+                                      {ipo.name}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] font-semibold text-[#903E97]">
+                                    {ipo.is_sme ? 'SME IPO' : 'Mainboard IPO'} &bull; {ipo.symbol}
+                                  </span>
+                                </div>
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 ${
+                                    isOpen
+                                      ? 'bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30'
+                                      : isUpcoming
+                                      ? 'bg-[#FFF3E0] text-[#E65100] border border-[#E65100]/30'
+                                      : 'bg-[#F2F2F2] text-[#676A6C]'
+                                  }`}
+                                >
+                                  {isOpen ? 'Open Now' : isUpcoming ? 'Upcoming' : 'Listed'}
+                                </span>
+                              </div>
+
+                              <div className="space-y-1.5 pt-2 border-t border-[#F2F2F2] text-[11px]">
+                                <div className="flex justify-between">
+                                  <span className="text-[#676A6C]">Price Band:</span>
+                                  <span className="font-bold tabular-nums text-[#262B2E]">
+                                    {priceDisplay}
+                                  </span>
+                                </div>
+                                {ipo.lot_size && (
+                                  <div className="flex justify-between">
+                                    <span className="text-[#676A6C]">Lot Size:</span>
+                                    <span className="font-semibold text-[#262B2E]">
+                                      {ipo.lot_size} Shares
+                                    </span>
+                                  </div>
+                                )}
+                                {ipo.bidding_end_date && (
+                                  <div className="flex justify-between text-[10px]">
+                                    <span className="text-[#878787]">
+                                      {isOpen ? 'Closes on:' : 'Bidding:'}
+                                    </span>
+                                    <span className="font-medium text-[#262B2E]">
+                                      {ipo.bidding_end_date}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 3: BENCHMARK INDICES */}
+                  {activeMarketTab === 'indices' && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                        {effectiveIndices.map((indexItem) => (
+                          <div
+                            key={indexItem.id}
+                            className="p-3 rounded border border-[#E6E6E6] bg-[#FAF7FC]/50 hover:bg-white transition-all text-center"
+                          >
+                            <span className="font-bold text-[11px] text-[#262B2E] block mb-1">
+                              {indexItem.symbol}
+                            </span>
+                            <span className="tabular-nums font-extrabold text-xs text-[#262B2E] block mb-1">
+                              {indexItem.price}
+                            </span>
+                            <span
+                              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold tabular-nums ${
+                                indexItem.is_positive
+                                  ? 'bg-[#E8F5EE] text-[#0E8A54]'
+                                  : 'bg-[#FDECEC] text-[#D32F2F]'
+                              }`}
+                            >
+                              {indexItem.is_positive ? (
+                                <TrendingUp className="w-2.5 h-2.5" />
+                              ) : (
+                                <TrendingDown className="w-2.5 h-2.5" />
+                              )}
+                              {indexItem.change}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* ======================================================== */}
+            {/* B. MAIN EDITORIAL FEED GRID                               */}
+            {/* ======================================================== */}
             {loading ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
@@ -243,7 +699,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
           </main>
 
           {/* ======================================================== */}
-          {/* 3. RIGHT SIDEBAR: Subscription & Ad Box (.section-right)  */}
+          {/* 3. RIGHT SIDEBAR: Subscription & Fast Market Snapshot    */}
           {/* ======================================================== */}
           <aside className="w-full lg:w-72 shrink-0 space-y-4">
             {/* Journal Promo Card */}
@@ -270,6 +726,57 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                 Subscribe Now
               </button>
 
+              {/* Fast Market Glance Mini-Widget */}
+              <div className="pt-3 border-t border-[#E6E6E6] text-left space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#903E97] block">
+                  Market Radar Today
+                </span>
+
+                {topGainer && (
+                  <div className="flex items-center justify-between text-xs py-1 px-2 rounded bg-[#E8F5EE]/60">
+                    <div>
+                      <span className="font-bold text-[#262B2E] text-[11px] block">
+                        {topGainer.ticker_id || topGainer.company_name}
+                      </span>
+                      <span className="text-[10px] text-[#676A6C]">Top Gainer</span>
+                    </div>
+                    <span className="text-[11px] font-bold text-[#0E8A54] tabular-nums">
+                      {topGainer.percent_change}
+                    </span>
+                  </div>
+                )}
+
+                {topLoser && (
+                  <div className="flex items-center justify-between text-xs py-1 px-2 rounded bg-[#FDECEC]/60">
+                    <div>
+                      <span className="font-bold text-[#262B2E] text-[11px] block">
+                        {topLoser.ticker_id || topLoser.company_name}
+                      </span>
+                      <span className="text-[10px] text-[#676A6C]">Top Loser</span>
+                    </div>
+                    <span className="text-[11px] font-bold text-[#D32F2F] tabular-nums">
+                      {topLoser.percent_change}
+                    </span>
+                  </div>
+                )}
+
+                {featuredIpo && (
+                  <div className="flex items-center justify-between text-xs py-1 px-2 rounded bg-[#FAF7FC] border border-[#903E97]/15">
+                    <div>
+                      <span className="font-bold text-[#262B2E] text-[11px] block line-clamp-1">
+                        {featuredIpo.name}
+                      </span>
+                      <span className="text-[10px] text-[#903E97]">
+                        {featuredIpo.status === 'active' ? 'IPO Open Now' : 'IPO Radar'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-[#262B2E] tabular-nums">
+                      ₹{featuredIpo.issue_price || featuredIpo.max_price || 0}
+                    </span>
+                  </div>
+                )}
+              </div>
+
               <div className="pt-3 border-t border-[#E6E6E6] text-[11px] text-[#878787]">
                 <span>Inquiries: </span>
                 <a
@@ -286,4 +793,3 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
     </div>
   );
 };
-
