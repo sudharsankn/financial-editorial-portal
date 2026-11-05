@@ -230,3 +230,4 @@ npx vercel --prod
 
 ## 📄 License
 This project is proprietary and built for financial intelligence editorial operations.
+
