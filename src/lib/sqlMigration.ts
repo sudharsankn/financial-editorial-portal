@@ -369,6 +369,51 @@ CREATE POLICY "Public can view ad clicks"
   ON public.ad_clicks FOR SELECT
   USING (true);
 
+-- 12. IPOs Pipeline Table
+CREATE TABLE IF NOT EXISTS public.ipos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  symbol TEXT NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'upcoming' CHECK (status IN ('upcoming', 'ongoing', 'listed', 'closed')),
+  is_sme BOOLEAN NOT NULL DEFAULT false,
+  issue_price TEXT,
+  issue_size TEXT,
+  listing_date TEXT,
+  open_date TEXT,
+  close_date TEXT,
+  gmp TEXT,
+  subscription_rate TEXT,
+  is_published BOOLEAN NOT NULL DEFAULT true,
+  display_order INTEGER NOT NULL DEFAULT 0,
+  fetched_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.ipos ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can view ipos" ON public.ipos;
+CREATE POLICY "Public can view ipos"
+  ON public.ipos FOR SELECT
+  USING (true);
+
+-- 13. Contact Form Inquiries Table
+CREATE TABLE IF NOT EXISTS public.contact_inquiries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  mobile TEXT,
+  subject TEXT,
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.contact_inquiries ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can submit contact inquiries" ON public.contact_inquiries;
+CREATE POLICY "Public can submit contact inquiries"
+  ON public.contact_inquiries FOR INSERT
+  WITH CHECK (true);
+
 
 `;
 
