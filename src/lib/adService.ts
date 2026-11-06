@@ -170,3 +170,82 @@ export async function recordAdImpression(campaignId: string): Promise<void> {
   }
 }
 
+/**
+ * Upload an advertisement creative to Supabase Storage bucket ('ad-images' or 'story-images').
+ * Gracefully falls back to high-res Data URL so upload never fails.
+ */
+export async function uploadAdImageToSupabase(
+  fileOrBlob: File | Blob,
+  originalFilename: string = 'ad-banner.jpg'
+): Promise<{
+  success: boolean;
+  publicUrl?: string;
+  error?: string;
+  isLocalFallback?: boolean;
+}> {
+  const client = getSupabaseClient();
+  const fileExt = originalFilename.split('.').pop()?.toLowerCase() || 'jpg';
+  const cleanName = originalFilename.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 30);
+  const fileName = `ad_${Date.now()}_${cleanName}.${fileExt}`;
+  const filePath = `campaigns/${fileName}`;
+
+  if (client) {
+    try {
+      // First attempt 'ad-images' bucket, fallback to 'story-images'
+      let bucketName = 'ad-images';
+      let { error } = await client.storage
+        .from(bucketName)
+        .upload(filePath, fileOrBlob, {
+          cacheControl: '31536000',
+          upsert: true,
+          contentType: (fileOrBlob as any).type || 'image/jpeg',
+        });
+
+      if (error && (error.message?.includes('not found') || error.message?.includes('Bucket'))) {
+        bucketName = 'story-images';
+        const res = await client.storage
+          .from(bucketName)
+          .upload(filePath, fileOrBlob, {
+            cacheControl: '31536000',
+            upsert: true,
+            contentType: (fileOrBlob as any).type || 'image/jpeg',
+          });
+        error = res.error;
+      }
+
+      if (!error) {
+        const { data: urlData } = client.storage
+          .from(bucketName)
+          .getPublicUrl(filePath);
+
+        if (urlData?.publicUrl) {
+          return {
+            success: true,
+            publicUrl: urlData.publicUrl,
+            isLocalFallback: false,
+          };
+        }
+      }
+      console.warn('Supabase ad storage notice:', error?.message);
+    } catch (err: any) {
+      console.warn('Supabase ad upload notice:', err?.message);
+    }
+  }
+
+  // Graceful Local Fallback: Convert to Data URL
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve({
+        success: true,
+        publicUrl: reader.result as string,
+        isLocalFallback: true,
+      });
+    };
+    reader.onerror = () => {
+      resolve({ success: false, error: 'Failed to process ad image' });
+    };
+    reader.readAsDataURL(fileOrBlob);
+  });
+}
+
