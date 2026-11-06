@@ -24,10 +24,17 @@ import { ArticleDetail } from './components/ArticleDetail';
 import { AdminPanel } from './components/AdminPanel';
 import { SupabaseGuideModal } from './components/SupabaseGuideModal';
 import { NextJsExportModal } from './components/NextJsExportModal';
+import { SubscriptionPage } from './components/SubscriptionPage';
 
 export default function App() {
   // Navigation & View state
-  const [currentView, setCurrentView] = useState<'feed' | 'admin' | 'article'>('feed');
+  const [currentView, setCurrentView] = useState<'feed' | 'admin' | 'article' | 'subscribe'>(() => {
+    const path = window.location.pathname.replace(/^\//, '');
+    if (path === 'subscribe') return 'subscribe';
+    if (path === 'admin') return 'admin';
+    if (path) return 'article';
+    return 'feed';
+  });
   const [currentCanonicalUrl, setCurrentCanonicalUrl] = useState<string | null>(null);
   const [adminTab, setAdminTab] = useState<'stories' | 'markets' | 'stocks'>('stories');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -193,12 +200,15 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname.replace(/^\//, '');
-      if (path && path !== 'admin') {
-        setCurrentCanonicalUrl(path);
-        setCurrentView('article');
+      if (path === 'subscribe') {
+        setCurrentView('subscribe');
+        setCurrentCanonicalUrl(null);
       } else if (path === 'admin') {
         setCurrentView('admin');
         setCurrentCanonicalUrl(null);
+      } else if (path) {
+        setCurrentCanonicalUrl(path);
+        setCurrentView('article');
       } else {
         setCurrentView('feed');
         setCurrentCanonicalUrl(null);
@@ -217,15 +227,20 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Navigate back to feed or admin
-  const handleNavigate = (view: 'feed' | 'admin') => {
+  // Navigate back to feed, admin, or subscribe
+  const handleNavigate = (view: 'feed' | 'admin' | 'subscribe') => {
     if (view === 'feed') {
       setCurrentView('feed');
       setCurrentCanonicalUrl(null);
       window.history.pushState(null, '', '/');
     } else if (view === 'admin') {
       setCurrentView('admin');
+      setCurrentCanonicalUrl(null);
       window.history.pushState(null, '', '/admin');
+    } else if (view === 'subscribe') {
+      setCurrentView('subscribe');
+      setCurrentCanonicalUrl(null);
+      window.history.pushState(null, '', '/subscribe');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -287,7 +302,7 @@ export default function App() {
           if (currentView !== 'feed') handleNavigate('feed');
         }}
         onOpenSubscribe={() => {
-          window.open('https://hedgeohari.com/subscribe', '_blank');
+          handleNavigate('subscribe');
         }}
       />
 
@@ -323,7 +338,8 @@ export default function App() {
           if (currentView !== 'feed') handleNavigate('feed');
         }}
         onOpenSubscribe={() => {
-          window.open('https://hedgeohari.com/subscribe', '_blank');
+          setSidebarOpen(false);
+          handleNavigate('subscribe');
         }}
         onOpenBookmarks={() => {
           setShowOnlyBookmarks(true);
@@ -346,7 +362,7 @@ export default function App() {
               setSelectedSection(sec);
             }}
             onSelectStory={handleSelectStory}
-            onOpenSubscribe={() => window.open('https://hedgeohari.com/subscribe', '_blank')}
+            onOpenSubscribe={() => handleNavigate('subscribe')}
             marketTickers={marketTickers}
             trendingStocks={publishedTrendingStocks}
             ipos={publishedIpos}
@@ -422,10 +438,17 @@ export default function App() {
             />
           </div>
         )}
+        {/* VIEW D: DEDICATED SUBSCRIPTION PAGE */}
+        {currentView === 'subscribe' && (
+          <SubscriptionPage
+            onBackHome={() => handleNavigate('feed')}
+            onSelectStory={handleSelectStory}
+          />
+        )}
       </main>
 
       {/* 4. Hedge Ohari Minimalist Brand Footer */}
-      {currentView === 'feed' && <HedgeFooter />}
+      {currentView !== 'admin' && <HedgeFooter />}
 
       {/* Modals for Supabase & Next.js export */}
       <SupabaseGuideModal
