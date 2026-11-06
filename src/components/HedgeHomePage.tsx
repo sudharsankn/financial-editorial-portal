@@ -38,6 +38,7 @@ import {
 import { formatTimeAgo } from '../lib/timeAgo';
 import { DEFAULT_MARKET_TICKERS } from '../lib/supabase';
 import { DEFAULT_TRENDING_STOCKS } from '../lib/marketData';
+import { ShareModal } from './ShareModal';
 
 interface HedgeHomePageProps {
   stories: Story[];
@@ -80,6 +81,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [sharingStory, setSharingStory] = useState<Story | null>(null);
   const [localBookmarkedIds, setLocalBookmarkedIds] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem('hedge_saved_bookmarks');
@@ -273,14 +275,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
   const handleShare = (story: Story, e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = `${window.location.origin}/${story.canonical_url}`;
-    if (navigator.share) {
-      navigator.share({ title: story.heading, url }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(url);
-      setCopiedId(story.id);
-      setTimeout(() => setCopiedId(null), 2000);
-    }
+    setSharingStory(story);
   };
 
   const navSections = [
@@ -1692,6 +1687,13 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
           </aside>
         </div>
       </div>
+
+      {/* Rich Social Share Modal (WhatsApp, Facebook, X, LinkedIn, Telegram, Email) */}
+      <ShareModal
+        isOpen={Boolean(sharingStory)}
+        onClose={() => setSharingStory(null)}
+        story={sharingStory}
+      />
     </div>
   );
 };

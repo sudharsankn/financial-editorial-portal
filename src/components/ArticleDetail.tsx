@@ -20,6 +20,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { detectScript } from '../lib/grapheme';
+import { ShareModal } from './ShareModal';
 
 interface ArticleDetailProps {
   story: Story;
@@ -51,6 +52,7 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
   onOpenSignIn,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [localBookmarked, setLocalBookmarked] = useState(false);
   const isSaved = isBookmarked !== undefined ? isBookmarked : localBookmarked;
   const [showSeoMeta, setShowSeoMeta] = useState(false);
@@ -106,12 +108,7 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
   }).format(new Date(story.created_at));
 
   const handleShare = () => {
-    const fullUrl = `${window.location.origin}/${story.canonical_url}`;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(fullUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    setShareModalOpen(true);
   };
 
   const fallbackImage =
@@ -471,6 +468,13 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
           </div>
         </section>
       )}
+
+      {/* Rich Social Share Modal (WhatsApp, Facebook, X, LinkedIn, Telegram, Email) */}
+      <ShareModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        story={story}
+      />
     </div>
   );
 };

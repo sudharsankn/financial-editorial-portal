@@ -3,6 +3,7 @@ import { Story } from '../types/story';
 import { Bookmark, Share2, ArrowRight, Clock, Check, FileText } from 'lucide-react';
 import { detectScript } from '../lib/grapheme';
 import { formatTimeAgo } from '../lib/timeAgo';
+import { ShareModal } from './ShareModal';
 
 interface StoryCardProps {
   story: Story;
@@ -22,6 +23,7 @@ export const StoryCard: React.FC<StoryCardProps> = ({
   const [imgError, setImgError] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const isSaved = isBookmarked !== undefined ? isBookmarked : bookmarked;
 
@@ -35,12 +37,7 @@ export const StoryCard: React.FC<StoryCardProps> = ({
 
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const shareUrl = `${window.location.origin}/${story.canonical_url}`;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    setShareModalOpen(true);
   };
 
   const handleBookmark = (e: React.MouseEvent) => {
@@ -165,6 +162,13 @@ export const StoryCard: React.FC<StoryCardProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Rich Social Share Modal (WhatsApp, Facebook, X, LinkedIn, Telegram, Email) */}
+      <ShareModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        story={story}
+      />
     </article>
   );
 };
