@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { detectScript } from '../lib/grapheme';
 import { ShareModal } from './ShareModal';
+import { AdBanner } from './AdBanner';
 
 interface ArticleDetailProps {
   story: Story;
@@ -112,6 +113,30 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
       return parts.slice(0, 4).join('');
     }
     return html.slice(0, 400) + '...';
+  };
+
+  // Helper to insert Full Story - Solo Position Ad after Paragraph 3 (matching legacy Article.js)
+  const renderStoryWithSoloAd = (html: string) => {
+    if (!html) return <p>Story content pending editorial review.</p>;
+    const parts = html.split(/(<\/p>)/i);
+    // 3 paragraphs = 6 parts (0, 1, 2, 3, 4, 5)
+    if (parts.length >= 6) {
+      const firstChunk = parts.slice(0, 6).join('');
+      const secondChunk = parts.slice(6).join('');
+      return (
+        <>
+          <div dangerouslySetInnerHTML={{ __html: firstChunk }} />
+          <AdBanner position="Full Story - Solo Position" format="in_article" />
+          <div dangerouslySetInnerHTML={{ __html: secondChunk }} />
+        </>
+      );
+    }
+    return (
+      <>
+        <div dangerouslySetInnerHTML={{ __html: html }} />
+        <AdBanner position="Full Story - Solo Position" format="in_article" />
+      </>
+    );
   };
 
   // Keyboard navigation for Previous & Next story (legacy SwipeItem.js navigation)
@@ -442,6 +467,9 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
               <span>Instant Razorpay Activation • Cancel Anytime • 100% Secure</span>
             </p>
           </div>
+
+          {/* Full Story - Solo Position Ad below paywall */}
+          <AdBanner position="Full Story - Solo Position" format="in_article" />
         </div>
       ) : (
         <>
@@ -462,8 +490,9 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
                 : '[&_p]:text-base [&_p]:leading-relaxed text-base'
             }`}
             dir={isRTL ? 'rtl' : 'ltr'}
-            dangerouslySetInnerHTML={{ __html: story.full_story || '<p>Story content pending editorial review.</p>' }}
-          />
+          >
+            {renderStoryWithSoloAd(story.full_story)}
+          </article>
         </>
       )}
 

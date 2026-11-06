@@ -63,6 +63,7 @@ import {
   Copy,
   ArrowDownToLine,
 } from 'lucide-react';
+import { AdminAdsManager } from './AdminAdsManager';
 
 interface AdminPanelProps {
   stories: Story[];
@@ -75,7 +76,7 @@ interface AdminPanelProps {
   marketTickers: MarketTickerItem[];
   onRefreshMarketTickers: () => Promise<void>;
   onRefreshStories?: () => Promise<void>;
-  initialAdminTab?: 'stories' | 'markets' | 'stocks';
+  initialAdminTab?: 'stories' | 'markets' | 'stocks' | 'ads';
 }
 
 
@@ -119,7 +120,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onRefreshStories,
   initialAdminTab = 'stocks',
 }) => {
-  const [adminTab, setAdminTab] = useState<'stories' | 'markets' | 'stocks'>(initialAdminTab);
+  const [adminTab, setAdminTab] = useState<'stories' | 'markets' | 'stocks' | 'ads'>(initialAdminTab);
   // Mode: 'list' (dashboard) or 'editor' (form)
   const [mode, setMode] = useState<'list' | 'editor'>('list');
 
@@ -656,6 +657,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F5EE] text-[#0E8A54]">
             {marketTickers?.length || 0}
           </span>
+        </button>
+
+        <button
+          id="btn-admin-tab-ads"
+          type="button"
+          onClick={() => {
+            setAdminTab('ads');
+            setMessage(null);
+          }}
+          className={`shrink-0 flex items-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-3 sm:px-4 text-xs font-bold border-b-2 transition-colors cursor-pointer ${
+            adminTab === 'ads'
+              ? 'border-[#6A1B9A] text-[#6A1B9A]'
+              : 'border-transparent text-[#58606E] hover:text-[#1E2229]'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-[#B78103]" />
+          <span>Advertisements</span>
         </button>
       </div>
 
@@ -1947,6 +1965,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         )}
       </div>
     )}
+
+    {/* TAB 4: ADVERTISEMENTS & SPONSORSHIPS MANAGER */}
+    {adminTab === 'ads' && <AdminAdsManager />}
   </div>
   );
 };

@@ -39,6 +39,7 @@ import { formatTimeAgo } from '../lib/timeAgo';
 import { DEFAULT_MARKET_TICKERS } from '../lib/supabase';
 import { DEFAULT_TRENDING_STOCKS } from '../lib/marketData';
 import { ShareModal } from './ShareModal';
+import { AdBanner } from './AdBanner';
 
 interface HedgeHomePageProps {
   stories: Story[];
@@ -755,6 +756,9 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
             {/* Desktop FIND STORIES Box (Second as requested) */}
             {renderFindStoriesBox(false)}
 
+            {/* IAB Standard 300x250 Left Sidebar Ad Banner */}
+            <AdBanner position="Sidebar - Left" format="sidebar" />
+
             {/* Journal Subscription Promo */}
             <div id="section-journal-promo-left" className="p-4 bg-white rounded border border-[#E6E6E6] text-center shadow-2xs">
               <span className="text-[11px] font-bold text-[#262B2E] block mb-1">
@@ -1373,9 +1377,9 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   const excerpt = getExcerpt(story.short_description || story.full_story);
 
                   return (
-                    <article
-                      key={story.id}
-                      id={`story-card-${story.id}`}
+                    <React.Fragment key={story.id}>
+                      <article
+                        id={`story-card-${story.id}`}
                       onClick={() => onSelectStory(story.canonical_url)}
                       className={`bg-white rounded border border-[#E6E6E6] shadow-2xs hover:shadow-sm transition-all duration-200 overflow-hidden cursor-pointer group flex flex-col justify-between ${
                         isHero ? 'xl:col-span-2' : ''
@@ -1476,7 +1480,16 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                         </div>
                       </div>
                     </article>
-                  );
+
+                    {/* Box Listing - Position 6: In-Feed Horizontal Ad Banner */}
+                    {(index + 1) % 6 === 0 && (
+                      <AdBanner
+                        position="Box Listing - Position 6"
+                        format="in_feed"
+                      />
+                    )}
+                  </React.Fragment>
+                );
                 })}
               </div>
 
@@ -1586,6 +1599,9 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
           {/* 3. RIGHT SIDEBAR: Subscription & Fast Market Snapshot    */}
           {/* ======================================================== */}
           <aside id="section-right-sidebar" className="w-full lg:w-72 xl:w-80 2xl:w-96 shrink-0 space-y-4">
+            {/* IAB Standard 300x250 Right Sidebar Ad Banner (Same size as Left Sidebar) */}
+            <AdBanner position="Sidebar - Right" format="sidebar" />
+
             {/* Journal Promo Card */}
             <div id="section-journal-subscription-right" className="bg-white rounded border border-[#E6E6E6] p-5 shadow-2xs text-center space-y-3">
               <div className="w-12 h-12 mx-auto rounded-full bg-[#FAF7FC] border border-[#903E97]/20 flex items-center justify-center text-[#903E97] font-extrabold text-sm">

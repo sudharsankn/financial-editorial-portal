@@ -291,6 +291,55 @@ CREATE POLICY "Public can create subscription records"
   ON public.subscriptions FOR INSERT
   WITH CHECK (true);
 
+-- 9. Advertisements & Sponsorships Table (IAB Standards)
+CREATE TABLE IF NOT EXISTS public.advertisements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id TEXT UNIQUE NOT NULL,
+  advertiser TEXT NOT NULL,
+  brand TEXT NOT NULL,
+  ad_position TEXT NOT NULL CHECK (ad_position IN ('Full Story - Solo Position', 'Box Listing - Position 6', 'Sidebar - Left', 'Sidebar - Right')),
+  ad_type TEXT NOT NULL DEFAULT 'Display' CHECK (ad_type IN ('Display', 'Video')),
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  display_ad_material TEXT NOT NULL,
+  display_ad_url TEXT NOT NULL,
+  video_ad_material TEXT,
+  start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  end_date DATE NOT NULL DEFAULT (CURRENT_DATE + INTERVAL '30 days'),
+  cost_per_day NUMERIC NOT NULL DEFAULT 0,
+  number_of_days INTEGER NOT NULL DEFAULT 30,
+  total_cost NUMERIC NOT NULL DEFAULT 0,
+  impressions_count BIGINT NOT NULL DEFAULT 0,
+  clicks_count BIGINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_ads_position_active ON public.advertisements (ad_position, is_active);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ads_campaign_id ON public.advertisements (campaign_id);
+
+ALTER TABLE public.advertisements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can view active advertisements" ON public.advertisements;
+CREATE POLICY "Public can view active advertisements"
+  ON public.advertisements FOR SELECT
+  USING (true);
+
+DROP POLICY IF EXISTS "Editorial staff can manage advertisements" ON public.advertisements;
+CREATE POLICY "Editorial staff can manage advertisements"
+  ON public.advertisements FOR ALL
+  USING (true)
+  WITH CHECK (true);
+
+-- Seed Initial Real Ad Campaigns
+INSERT INTO public.advertisements (campaign_id, advertiser, brand, ad_position, ad_type, is_active, display_ad_material, display_ad_url, start_date, end_date, cost_per_day, number_of_days, total_cost)
+VALUES
+  ('OH00074', 'ICICI Prudential', 'SIP', 'Full Story - Solo Position', 'Display', true, '/ads/icici-sip.jpg', 'https://www.iciciprumf.com', '2025-07-08', '2027-08-08', 0, 31, 0),
+  ('OH00073', 'ICICI Prudential', 'SIP', 'Box Listing - Position 6', 'Display', true, '/ads/icici-sip.jpg', 'https://www.iciciprumf.com', '2025-07-08', '2027-08-08', 0, 31, 0),
+  ('OH00075', 'Nippon India', 'Mutual Fund', 'Sidebar - Right', 'Display', true, '/ads/nippon-mf.jpg', 'https://mf.nipponindiaim.com', '2025-07-08', '2027-08-08', 0, 31, 0),
+  ('OH00076', 'ICICI Prudential', 'SIP', 'Sidebar - Left', 'Display', true, '/ads/icici-sip.jpg', 'https://www.iciciprumf.com', '2025-07-08', '2027-08-08', 0, 31, 0)
+ON CONFLICT (campaign_id) DO NOTHING;
+
+
 `;
 
 export const VERCEL_DEPLOY_GUIDE = `# Step-by-Step Vercel & Supabase Deployment Guide

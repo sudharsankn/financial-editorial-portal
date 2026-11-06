@@ -47,7 +47,7 @@ export default function App() {
     return 'feed';
   });
   const [currentCanonicalUrl, setCurrentCanonicalUrl] = useState<string | null>(null);
-  const [adminTab, setAdminTab] = useState<'stories' | 'markets' | 'stocks'>('stories');
+  const [adminTab, setAdminTab] = useState<'stories' | 'markets' | 'stocks' | 'ads'>('stories');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // User Auth State
