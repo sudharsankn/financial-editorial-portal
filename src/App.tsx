@@ -27,14 +27,21 @@ import { NextJsExportModal } from './components/NextJsExportModal';
 import { SubscriptionPage } from './components/SubscriptionPage';
 import { SignInModal } from './components/SignInModal';
 import { MyAccountPage } from './components/MyAccountPage';
+import { StaticPageViewer, StaticPageType } from './components/StaticPageViewer';
 import { getCurrentUser, logoutUser, UserAccount } from './lib/auth';
 
 export default function App() {
   // Navigation & View state
-  const [currentView, setCurrentView] = useState<'feed' | 'admin' | 'article' | 'subscribe' | 'my-account'>(() => {
+  const [currentView, setCurrentView] = useState<
+    'feed' | 'admin' | 'article' | 'subscribe' | 'my-account' | 'about-us' | 'contact-us' | 'terms-of-use' | 'privacy-policy'
+  >(() => {
     const path = window.location.pathname.replace(/^\//, '');
     if (path === 'subscribe') return 'subscribe';
     if (path === 'my-account') return 'my-account';
+    if (path === 'about-us') return 'about-us';
+    if (path === 'contact-us') return 'contact-us';
+    if (path === 'terms-of-use') return 'terms-of-use';
+    if (path === 'privacy-policy') return 'privacy-policy';
     if (path === 'admin') return 'admin';
     if (path) return 'article';
     return 'feed';
@@ -235,24 +242,24 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Navigate back to feed, admin, subscribe, or my-account
-  const handleNavigate = (view: 'feed' | 'admin' | 'subscribe' | 'my-account') => {
+  // Navigate to any view / page
+  const handleNavigate = (
+    view:
+      | 'feed'
+      | 'admin'
+      | 'subscribe'
+      | 'my-account'
+      | 'about-us'
+      | 'contact-us'
+      | 'terms-of-use'
+      | 'privacy-policy'
+  ) => {
+    setCurrentView(view);
+    setCurrentCanonicalUrl(null);
     if (view === 'feed') {
-      setCurrentView('feed');
-      setCurrentCanonicalUrl(null);
       window.history.pushState(null, '', '/');
-    } else if (view === 'admin') {
-      setCurrentView('admin');
-      setCurrentCanonicalUrl(null);
-      window.history.pushState(null, '', '/admin');
-    } else if (view === 'subscribe') {
-      setCurrentView('subscribe');
-      setCurrentCanonicalUrl(null);
-      window.history.pushState(null, '', '/subscribe');
-    } else if (view === 'my-account') {
-      setCurrentView('my-account');
-      setCurrentCanonicalUrl(null);
-      window.history.pushState(null, '', '/my-account');
+    } else {
+      window.history.pushState(null, '', `/${view}`);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -385,6 +392,10 @@ export default function App() {
         onOpenMyAccount={() => {
           setSidebarOpen(false);
           handleNavigate('my-account');
+        }}
+        onNavigatePage={(page) => {
+          setSidebarOpen(false);
+          handleNavigate(page);
         }}
       />
 
@@ -528,10 +539,22 @@ export default function App() {
             </div>
           )
         )}
+        {/* VIEW F: STATIC IN-APP EDITORIAL & LEGAL PAGES */}
+        {(['about-us', 'contact-us', 'terms-of-use', 'privacy-policy'] as StaticPageType[]).includes(
+          currentView as StaticPageType
+        ) && (
+          <StaticPageViewer
+            pageType={currentView as StaticPageType}
+            onNavigateHome={() => handleNavigate('feed')}
+            onNavigatePage={(page) => handleNavigate(page)}
+          />
+        )}
       </main>
 
       {/* 4. Hedge Ohari Minimalist Brand Footer */}
-      {currentView !== 'admin' && <HedgeFooter />}
+      {currentView !== 'admin' && (
+        <HedgeFooter onNavigatePage={(page) => handleNavigate(page)} />
+      )}
 
       {/* Sign In Modal */}
       <SignInModal

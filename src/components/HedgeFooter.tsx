@@ -1,7 +1,11 @@
 import React from 'react';
 import { Globe, Mail, Phone, ExternalLink } from 'lucide-react';
 
-export const HedgeFooter: React.FC = () => {
+interface HedgeFooterProps {
+  onNavigatePage?: (page: 'about-us' | 'contact-us' | 'terms-of-use' | 'privacy-policy') => void;
+}
+
+export const HedgeFooter: React.FC<HedgeFooterProps> = ({ onNavigatePage }) => {
   return (
     <footer id="section-footer" className="bg-white border-t border-[#E6E6E6] py-10 text-xs text-[#676A6C]">
       <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14">
@@ -42,21 +46,41 @@ export const HedgeFooter: React.FC = () => {
           </div>
         </div>
 
-        {/* Bottom copyright */}
+        {/* Bottom copyright & In-App Navigation */}
         <div id="footer-bottom-copyright" className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-[#878787]">
-          <p>© {new Date().getFullYear()} Hedge Ohari. All rights reserved.</p>
-          <div className="flex items-center gap-4">
-            <a id="link-footer-terms" href="https://hedgeohari.com/terms-of-use" target="_blank" rel="noreferrer" className="hover:text-[#903E97]">
+          <p>© {new Date().getFullYear()} Hedge Ohari &bull; Hedge School of Applied Economics (HSAE). All rights reserved.</p>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <button
+              type="button"
+              onClick={() => onNavigatePage?.('about-us')}
+              className="hover:text-[#903E97] transition-colors cursor-pointer"
+            >
+              About Hedge (ഞങ്ങളെക്കുറിച്ച്)
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => onNavigatePage?.('contact-us')}
+              className="hover:text-[#903E97] transition-colors cursor-pointer font-semibold text-[#903E97]"
+            >
+              Contact Us (ഓഫീസ് വിലാസം)
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => onNavigatePage?.('terms-of-use')}
+              className="hover:text-[#903E97] transition-colors cursor-pointer"
+            >
               Terms of Use
-            </a>
+            </button>
             <span>•</span>
-            <a id="link-footer-privacy" href="https://hedgeohari.com/privacy-policy" target="_blank" rel="noreferrer" className="hover:text-[#903E97]">
+            <button
+              type="button"
+              onClick={() => onNavigatePage?.('privacy-policy')}
+              className="hover:text-[#903E97] transition-colors cursor-pointer"
+            >
               Privacy Policy
-            </a>
-            <span>•</span>
-            <a id="link-footer-about" href="https://hedgeohari.com/about-us" target="_blank" rel="noreferrer" className="hover:text-[#903E97]">
-              About Hedge
-            </a>
+            </button>
           </div>
         </div>
       </div>

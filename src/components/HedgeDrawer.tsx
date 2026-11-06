@@ -14,6 +14,7 @@ interface HedgeDrawerProps {
   currentUser?: UserAccount | null;
   onOpenSignIn: () => void;
   onOpenMyAccount: () => void;
+  onNavigatePage?: (page: 'about-us' | 'contact-us' | 'terms-of-use' | 'privacy-policy') => void;
 }
 
 const SECTIONS_LIST = [
@@ -35,6 +36,7 @@ export const HedgeDrawer: React.FC<HedgeDrawerProps> = ({
   currentUser = null,
   onOpenSignIn,
   onOpenMyAccount,
+  onNavigatePage,
 }) => {
   if (!isOpen) return null;
 
@@ -157,6 +159,31 @@ export const HedgeDrawer: React.FC<HedgeDrawerProps> = ({
             >
               EDITORIAL ADMIN PANEL
             </button>
+
+            {onNavigatePage && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onNavigatePage('about-us');
+                    onClose();
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-white/85 hover:text-white hover:bg-white/10 rounded transition-colors"
+                >
+                  ABOUT HEDGE (ഞങ്ങളെക്കുറിച്ച്)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onNavigatePage('contact-us');
+                    onClose();
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-white/85 hover:text-white hover:bg-white/10 rounded transition-colors"
+                >
+                  CONTACT US (ഓഫീസ് വിലാസം)
+                </button>
+              </>
+            )}
           </div>
         </div>
 
