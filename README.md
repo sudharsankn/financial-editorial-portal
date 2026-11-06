@@ -410,55 +410,71 @@ The optimized production bundle will be generated in the `dist/` directory.
 
 ---
 
-## 🔄 Step-by-Step: How "Fetch Data on Click" Works
+## 🔄 Step-by-Step: How "Fetch Data on Click" & "Fetch & Publish Stories" Work
 
-The **"Fetch Data on Click"** feature allows editors to pull live market data, trending movers, IPOs, and multilingual news with a single click.
+The Admin Studio provides two high-performance 1-click workflows designed to serve both curated editorial oversight and rapid real-time wire publishing:
 
 ```mermaid
 flowchart TD
-    A["1. Editor clicks 'Fetch Data on Click'"] --> B["2. Concurrent Multi-Stream Ingestion"]
-    B --> C1["Malayalam News (GoodReturns, Dhanam Online)"]
-    B --> C2["English News (LiveMint, Economic Times)"]
-    B --> C3["Live Indices (NIFTY 50, SENSEX, BANK NIFTY, VIX)"]
-    B --> C4["Market Movers & IPO Pipeline"]
+    subgraph Actions["1-Click Action Bar (/admin -> Market News Wire)"]
+        B1["Fetch Data on Click<br/>(Fetch and manually publish in Stories Manager)"]
+        B2["Fetch & Publish Stories<br/>(Fetch and auto publish - zero duplicates)"]
+    end
+
+    subgraph Ingestion["Concurrent Multi-Source Ingestion Engine"]
+        F1["Yahoo Finance API<br/>(Real-Time Indices & 30 Nifty Movers)"]
+        F2["Multi-Source RSS Wire Engine<br/>(LiveMint, ET, BS, NDTV, GoodReturns, Dhanam)"]
+        F3["SEBI DRHP Pipeline<br/>(Verified Unlisted IPOs)"]
+    end
+
+    B1 --> F1 & F2 & F3
+    B2 --> F2
+
+    F2 --> DEDUP{"4-Tier Duplicate Check<br/>1. Slug Check<br/>2. Heading Check<br/>3. Source URL Check<br/>4. In-Batch Filter"}
+
+    DEDUP -->|Duplicate Found| SKIP["Safely Skip Article"]
+    DEDUP -->|Unique Article| PUB["Direct Auto-Publish<br/>(publishing_status = 'Published')"]
+
+    B1 --> STAGE["Review & Staging Wire<br/>- Filter by Language<br/>- Save to 'news' Table<br/>- 'Use in New Story' Manual Editor"]
     
-    C1 --> D["3. Content & Image Extraction (Authentic Photos)"]
-    C2 --> D
-    C3 --> E["Automatic Database Sync (Tickers & Movers)"]
-    C4 --> E
-    
-    D --> F["4. Staging in 'Market News Wire'"]
-    E --> G["Live Tickers Updated on Public Portal"]
-    
-    D --> H1["Action: 'Save to News DB' (public.news)"]
-    D --> H2["Action: 'Use in New Story' -> Instant Publish to public.stories"]
+    PUB --> STORE["Dual Persistence<br/>1. Supabase public.stories<br/>2. Local Storage Engine"]
+    STAGE --> STORE
+    STORE --> FEED["Live Reader Feed Updated (Instant Refresh)"]
 ```
 
-### Step 1: User Initiation
-1. Open the Admin Studio at `/admin`.
-2. Select the **Market News Wire** tab.
-3. Click the purple button **"Fetch Data on Click"** (`#btn-fetch-unified-data`).
+### The Two 1-Click Publishing Workflows
 
-### Step 2: Concurrent Multi-Source Ingestion
-The engine executes parallel asynchronous calls across multiple financial sources:
-* **Malayalam Financial Wire:** GoodReturns Malayalam and Dhanam Online.
-* **English Financial Wire:** LiveMint Markets and The Economic Times.
-* **Market Indices:** Real-time data for NIFTY 50, SENSEX, BANK NIFTY, and INDIA VIX.
-* **Market Movers & IPOs:** Top 10 Gainers, Top 10 Losers, and upcoming Mainboard/SME IPOs.
+| Action Button | Short & Crisp Instruction | Purpose & Editorial Flow |
+| :--- | :--- | :--- |
+| **"Fetch Data on Click"**<br/>(`#btn-fetch-unified-data`) | *Fetch and manually publish in Stories Manager* | **Curated & Guided Editorial:** Pulls all live benchmark indices, top gainers/losers, IPO pipeline, and wire articles into the staging area. Editors can review original dispatches, filter by language (Malayalam / English), save items to `public.news`, or click **"Use in New Story"** to open the Story Editor with pre-filled fields for manual editorial enhancement before publishing. |
+| **"Fetch & Publish Stories"**<br/>(`#btn-fetch-and-publish-stories`) | *Fetch and auto publish (zero duplicates)* | **Automated Zero-Friction Publishing:** Instantly ingests fresh financial wire stories and creates them directly in **`Published`** mode (`publishing_status = 'Published'`). Enforces strict 4-layer duplicate prevention to ensure no story is ever duplicated. Dual-persists to Supabase `public.stories` and browser local storage, updating the reader portal without a page reload. |
 
-### Step 3: Smart Extraction & Language Detection
-* **Authentic Lead Images:** Automatically parses original `<enclosure>`, `<media:content>`, or high-res image tags.
-* **Unicode Script Classification:** Detects Malayalam characters (`[\u0D00-\u0D7F]`) to prioritize Malayalam stories.
-* **SEO Metadata:** Generates canonical slugs, summaries, and keyword tags automatically.
+### Strict 4-Layer Duplicate Prevention Engine
+To prevent duplicate stories from polluting the editorial portal, **"Fetch & Publish Stories"** passes every incoming item through four strict uniqueness gates:
+1. **Canonical Slug Validation**: Computes URL slug via `generateCanonicalSlug(title)` and checks against all existing slugs in the database and local storage.
+2. **Normalized Unicode Heading Matching**: Normalizes NFC text and strips spaces and punctuation to catch duplicates even if headlines have minor typographical variations.
+3. **Source URL De-duplication**: Matches the original article's destination link (`source_url`) against existing records.
+4. **In-Batch De-duplication**: Tracks newly processed articles within the active stream so identical wire stories published across multiple wire sources (e.g. both Mint and ET covering the same earnings report) are ingested only once.
 
-### Step 4: Staging for Editorial Review
-* Live indices and movers update the public ticker immediately.
-* Incoming news dispatches are placed in the **Market News Wire** staging view for review, ensuring unvetted content is never published without editorial sign-off.
+### Multi-Tier Data Sources & Fallback Hierarchy (Plan A / Plan B / Plan C)
 
-### Step 5: 1-Click Publishing
-On any item in the staging wire, editors can:
-1. Click **"Use in New Story"**: Opens the Story Editor with the headline, authentic image, complete article body, category, and SEO slug pre-filled.
-2. Select **"Publish"** and click **"Save Story"**: The article is published to the public portal and stored in Supabase `public.stories`.
+1. **Benchmark Indices (NIFTY 50, SENSEX, BANK NIFTY, NIFTY IT, GOLD, BRENT, USD/INR, NASDAQ)**:
+   * **Plan A (Primary Source):** Yahoo Finance real-time quotes via `yahoo-finance2` node module.
+   * **Plan B (Server-to-Client Fallback):** Per-symbol `.catch(() => null)` isolation + Supabase `public.market_tickers` last verified snapshot.
+   * **Plan C (Offline Safety Net):** Browser `localStorage` (`financial_portal_tickers_v1`) + high-integrity default benchmarks.
+2. **Top Movers (Gainers & Losers)**:
+   * **Plan A:** Computes real-time percentage change across 30 core Indian Nifty 50 large-caps; dynamic sorting into top gainers and decliners.
+   * **Plan B:** Client-side fallback (`runClientSideMarketFallback`) polling active quotes directly.
+   * **Plan C:** Browser `localStorage` (`financial_portal_trending_stocks_v1`) + `DEFAULT_TRENDING_STOCKS`.
+3. **Real-Time Market News Wire**:
+   * **Plan A:** Multi-source concurrent RSS ingestion (LiveMint, Economic Times, Business Standard, NDTV Profit, GoodReturns Malayalam, Dhanam Online).
+   * **Plan B:** Browser CORS proxy ingestion via `https://api.rss2json.com/v1/api.json`.
+   * **Plan C:** Local news cache (`financial_portal_news_v1`) and Supabase `public.news`.
+4. **IPO Watch (Strict Integrity Rules)**:
+   * **Plan A:** Verified SEBI DRHP pipeline (boAt, Urban Company, Juniper Green Energy, Runwal Developers, SEDEMAC Mechatronics, PhonePe, Zepto).
+   * **Integrity Gate:** Strict blocklist (`JIO`, `RELIANCE`, `SWIGGY`, `SAGILITY`, `ACME`, `NTPC`, `MAXWELL`, `HYUNDAI`, `ZOMATO`, `PAYTM`) permanently excludes listed secondary-market stocks.
+   * **Plan B (Authentic Empty State):** Labeled "Open Now" *only* if today falls strictly between verified bidding start and end dates. When 0 IPOs are open today, displays authentic empty state (*"ഇന്ന് സബ്‌സ്‌ക്രിപ്ഷനായി പുതിയ ഐപിഒകൾ ലഭ്യമല്ല"*).
+   * **Plan C:** Browser `localStorage` (`financial_portal_ipos_v3`).
 
 ---
 

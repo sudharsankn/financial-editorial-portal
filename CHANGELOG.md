@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     4. *In-Batch De-duplication*: prevents duplicates within the incoming RSS stream.
   - Automatically truncates headings to $\le 70$ graphemes (`Intl.Segmenter`) with clean ellipses.
   - Dual persistence to Supabase `public.stories` and browser local store with instant UI refresh.
+- **Crisp Button Instructions & Tooltip Guidelines**:
+  - Streamlined Action Bar copy with short, crisp instructions:
+    - **Button 1 (Fetch Data on Click)**: Tooltip and sub-label: *"Fetch and manually publish in Stories Manager"*.
+    - **Button 2 (Fetch & Publish Stories)**: Tooltip and sub-label: *"Fetch and auto publish (zero duplicates)"*.
+    - **Studio Header**: *"Choose **Fetch Data on Click** to fetch and manually publish in Stories Manager, or **Fetch & Publish Stories** to fetch and auto publish."*
+- **Documented Multi-Tier Data Source & Fallback Hierarchy**:
+  - Formally specified Plan A (primary live feeds), Plan B (isolated try/catch & client CORS proxy), and Plan C (zero-downtime local storage cache) for Indices, Movers, News, and IPOs in `README.md` and `DOCUMENTATION.md`.
 
 ---
 

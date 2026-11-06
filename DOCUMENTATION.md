@@ -30,10 +30,10 @@ A high-coverage, multilingual financial editorial and market intelligence portal
                                       |   - Yahoo Finance (Indices & 30 Nifty Large-Caps)|
                                       |   - Malayalam RSS (Dhanam Online, GoodReturns)  |
                                       |   - English RSS (LiveMint, Economic Times, BS)   |
-                                      |   - Chittorgarh IPO Wire                        |
+                                      |   - SEBI DRHP Upcoming IPO Pipeline              |
                                       +------------------------+------------------------+
                                                                |
-                                                 (Manual Click: "Fetch Data on Click")
+                                   (1-Click Action Bar: "Fetch Data on Click" & "Fetch & Publish Stories")
                                                                v
 +-----------------------------------+        +------------------------------------------+
 | Admin Studio (/admin)             |        | Serverless API: /api/market-data         |
@@ -100,21 +100,70 @@ RAZORPAY_KEY_SECRET="SGNSZk9HMDxeYzR4xnT6lsoP"
 
 ---
 
-## 4. Free Unlimited Market Data Engine & "Fetch Data on Click"
+## 4. Free Unlimited Market Data Engine & 1-Click Editorial Action Bar
 
-The application uses a **100% free, unlimited market intelligence engine** that completely replaces rate-limited third-party APIs (such as `stock.indianapi.in`). It incurs zero API subscription costs and imposes no monthly request caps.
+The application operates a **100% free, unlimited market intelligence engine** that completely replaces rate-limited third-party APIs (such as `stock.indianapi.in`). It incurs zero API subscription costs and imposes no monthly request caps.
 
-### How "Fetch Data on Click" Works
+### The 1-Click Action Bar
 
-1. **User Initiation**: The editor clicks **"Fetch Data on Click"** (`#btn-fetch-unified-data`) in the Admin Panel Market News Wire tab.
-2. **Serverless Execution**: Request dispatched to `/api/market-data?endpoint=unified&symbol=RELIANCE`. Handled by Vite connect middleware in development and Vercel serverless function in production.
-3. **Multi-Source Fetch**: Parallel execution via `Promise.all` across:
-   - Yahoo Finance (Benchmark indices and 30 Nifty large-caps).
-   - Malayalam RSS feeds (GoodReturns Malayalam, Dhanam Online, TwentyFour News).
-   - English RSS feeds (LiveMint, Economic Times, Business Standard).
-   - Chittorgarh IPO Wire.
-4. **Authentic Lead Image Pipeline**: Automatically traverses `<enclosure>`, `<media:content>`, and embedded `<img>` tags. Falls back to `fetchArticleOgImage` to scrape OpenGraph metadata directly from publisher article URLs.
-5. **Database Commit & Sync**: Trending stocks saved to `public.trending_stocks`, tickers to `public.market_tickers`, and IPOs to `public.ipos`.
+The Admin Studio (`/admin` -> Market News Wire) provides two complementary 1-click workflows:
+
+| Action Button | Short & Crisp Instruction | Workflow & Behavior |
+| :--- | :--- | :--- |
+| **"Fetch Data on Click"**<br/>(`#btn-fetch-unified-data`) | *Fetch and manually publish in Stories Manager* | Ingests real-time indices, top movers, wire news, and IPO pipeline into the staging view. Allows editors to review dispatches, inspect lead images, save to `public.news`, or open in Story Editor for manual drafting and curation. |
+| **"Fetch & Publish Stories"**<br/>(`#btn-fetch-and-publish-stories`) | *Fetch and auto publish (zero duplicates)* | Automatically pulls fresh financial wire dispatches and directly creates and publishes them (`publishing_status = 'Published'`) with strict 4-layer duplicate prevention. Dual-persists to Supabase `public.stories` and local store, instantly updating the subscriber feed. |
+
+### Strict Multi-Layer Duplicate Prevention Engine
+When executing **"Fetch & Publish Stories"**, every incoming article must pass four consecutive uniqueness gates before creation:
+1. **Canonical Slug Validation**: Generates SEO slug via `generateCanonicalSlug()` and checks against all existing slugs in Supabase `public.stories` and `localStorage`.
+2. **Normalized Unicode Heading Matching**: Normalizes NFC text and strips punctuation and whitespace to prevent duplicate stories with minor formatting differences.
+3. **Source URL De-duplication**: Matches original publisher wire URLs (`source_url`) against existing story records.
+4. **In-Batch Uniqueness**: Tracks slugs and normalized titles within the incoming stream so identical stories across multiple RSS publishers are ingested only once.
+
+### Multi-Tier Data Sources & Fallback Hierarchy (Plan A / Plan B / Plan C)
+
+```mermaid
+flowchart TD
+    subgraph Plan_A["Plan A: Primary Live Feeds"]
+        YF["Yahoo Finance API<br/>(Real-Time Indices & 30 Nifty Movers)"]
+        RSS["Multi-Source RSS Wire Engine<br/>(Mint, ET, BS, NDTV, GoodReturns, Dhanam)"]
+        SEBI["Verified SEBI Pipeline<br/>(Real DRHP Filings & Approvals)"]
+    end
+
+    subgraph Plan_B["Plan B: Secondary Fallback"]
+        YF_Fail["Per-Symbol Try/Catch +<br/>Supabase market_tickers Table"]
+        RSS_Fail["api.rss2json.com<br/>Direct Client CORS Proxy"]
+        SEBI_Fail["Authentic Empty State<br/>(No Fake Dates / No Listed Stocks)"]
+    end
+
+    subgraph Plan_C["Plan C: Zero-Downtime Local Cache"]
+        LS["Browser localStorage &<br/>Curated High-Integrity Seed Defaults"]
+    end
+
+    Plan_A -->|Network / Scraper Timeout| Plan_B
+    Plan_B -->|Offline / Corporate Firewall| Plan_C
+```
+
+1. **Benchmark Indices (NIFTY 50, SENSEX, BANK NIFTY, NIFTY IT, GOLD, BRENT, USD/INR, NASDAQ)**:
+   - **Plan A**: Yahoo Finance quotes (`^NSEI`, `^BSESN`, `^NSEBANK`, `^CNXIT`, `GC=F`, `BZ=F`, `INR=X`, `^IXIC`).
+   - **Plan B**: Per-symbol `.catch(() => null)` isolation + Supabase `public.market_tickers` last verified snapshot.
+   - **Plan C**: Browser `localStorage` (`financial_portal_tickers_v1`) + high-integrity default benchmarks.
+2. **Top Movers (Gainers & Losers)**:
+   - **Plan A**: Computes percentage changes across 30 core Nifty large-caps; sorts highest gainers and decliners.
+   - **Plan B**: Client-side direct quote fallback (`runClientSideMarketFallback`).
+   - **Plan C**: `localStorage` (`financial_portal_trending_stocks_v1`) + `DEFAULT_TRENDING_STOCKS`.
+3. **Market News Wire**:
+   - **Plan A**: Multi-source round-robin RSS ingestion (LiveMint, Economic Times, Business Standard, NDTV Profit, GoodReturns Malayalam, Dhanam Online).
+   - **Plan B**: Browser-side CORS ingestion via `api.rss2json.com`.
+   - **Plan C**: Local news store (`financial_portal_news_v1`) and Supabase `public.news`.
+4. **IPO Watch (Strict Integrity Rules)**:
+   - **Plan A**: Curated SEBI-approved upcoming pipeline (boAt, Urban Company, Juniper Green Energy, Runwal Developers, SEDEMAC Mechatronics, PhonePe, Zepto).
+   - **Integrity Rule**: Strict blocklist (`JIO`, `RELIANCE`, `SWIGGY`, `SAGILITY`, `ACME`, `NTPC`, `MAXWELL`, `HYUNDAI`, `ZOMATO`, `PAYTM`) permanently excludes listed and secondary-market stocks.
+   - **Open Now Rule**: Labeled "Open Now" *only* if today is strictly between verified bidding start and end dates. When 0 IPOs are open today, displays authentic empty state (*"ഇന്ന് സബ്‌സ്‌ക്രിപ്ഷനായി പുതിയ ഐപിഒകൾ ലഭ്യമല്ല"*).
+
+### Data Persistence vs Ephemeral Caching Architecture
+- **Persistent Tables (Supabase PostgreSQL)**: Core business entities that require long-term storage and audit logs (`stories`, `advertisements`, `ad_clicks`, `subscribers`, `subscriptions`, `contact_inquiries`, `market_tickers`, and `story-images` storage bucket).
+- **Ephemeral Market Data (Fast Client Memory & localStorage)**: Intraday fluctuating data (daily stock movers, ephemeral wire lists, and IPO cache) are stored locally in the browser to eliminate rate limits, avoid unnecessary database egress, and maximize page load speeds.
 
 ---
 
