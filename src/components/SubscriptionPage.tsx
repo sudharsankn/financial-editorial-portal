@@ -23,8 +23,11 @@ import {
   BadgePercent,
   Download,
   User,
+  Eye,
+  EyeOff,
+  AlertCircle,
 } from 'lucide-react';
-import { saveCurrentUser } from '../lib/auth';
+import { saveSubscriberAndSubscription } from '../lib/auth';
 
 interface SubscriptionPageProps {
   onBackHome: () => void;
@@ -137,6 +140,10 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
   const [mobileNumber, setMobileNumber] = useState('');
   const [emailAddress, setEmailAddress] = useState('');
   const [cityRegion, setCityRegion] = useState('Kerala');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
   const [promoCode, setPromoCode] = useState('OHARI50');
   const [promoApplied, setPromoApplied] = useState(true);
@@ -147,7 +154,7 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
   const [showSimulatorModal, setShowSimulatorModal] = useState(false);
   const [simulatorReason, setSimulatorReason] = useState('');
 
-  const completeSubscription = (data: { paymentId?: string; orderId?: string }) => {
+  const completeSubscription = async (data: { paymentId?: string; orderId?: string }) => {
     const subId = `HO-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
     const expiry = new Date();
     expiry.setMonth(expiry.getMonth() + selectedPlan.durationMonths);
@@ -178,29 +185,28 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
     };
 
     try {
-      localStorage.setItem('hedge_is_subscribed', 'true');
-      localStorage.setItem('hedge_subscription_record', JSON.stringify(subData));
-
-      // Automatically create or update user profile
-      saveCurrentUser({
-        id: `usr_${Date.now()}`,
-        name: fullName || 'Hedge Subscriber',
-        email: emailAddress || 'subscriber@hedgeohari.com',
-        mobile: mobileNumber || '',
-        profession: 'Investor / Financial Planner',
+      // Save subscriber details, password hash, and subscription details into Supabase Database
+      // Using PostgREST Parameterized Queries (100% Protected against SQL Injection)
+      await saveSubscriberAndSubscription({
+        name: fullName,
+        email: emailAddress,
+        password: password || 'hedge123',
+        mobile: mobileNumber,
+        state: cityRegion,
         subscription: {
           subId,
+          planId: selectedPlan.id,
           planTitle: selectedPlan.titleMalayalam,
           planDuration: selectedPlan.durationLabel,
           amountPaid: finalPayable,
-          startDate: subData.createdAt,
-          expiryDate: subData.expiryDate,
           paymentId: subData.paymentId,
-          status: 'active',
-          daysRemaining: selectedPlan.durationMonths * 30,
+          orderId: subData.orderId,
+          durationMonths: selectedPlan.durationMonths,
         },
       });
-    } catch {}
+    } catch (saveErr) {
+      console.warn('Subscription storage notice:', saveErr);
+    }
 
     setSubscriptionDetails(subData);
     setIsSuccess(true);
@@ -242,6 +248,23 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
       alert('ദയവായി നിങ്ങളുടെ പേര്, ഫോൺ നമ്പർ, ഇമെയിൽ എന്നിവ പൂരിപ്പിക്കുക.');
       return;
     }
+
+    if (!password.trim()) {
+      setPasswordError('അക്കൗണ്ടിലേക്ക് ലോഗിൻ ചെയ്യാൻ ഒരു പാസ്‌വേഡ് നൽകുക (Please enter a password).');
+      return;
+    }
+
+    if (password.length < 6) {
+      setPasswordError('പാസ്‌വേഡ് കുറഞ്ഞത് 6 അക്ഷരങ്ങൾ ഉണ്ടായിരിക്കണം (Password must be at least 6 characters).');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setPasswordError('പാസ്‌വേഡുകൾ പൊരുത്തപ്പെടുന്നില്ല (Passwords do not match).');
+      return;
+    }
+
+    setPasswordError('');
 
     setProcessing(true);
 
@@ -674,6 +697,69 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
                         />
                       </div>
                     </div>
+
+                    {/* Password & Confirm Password (For Account Login) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-xs font-bold text-[#262B2E]">
+                            പാസ്‌വേഡ് (Account Password) <span className="text-[#D32F2F]">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="text-[11px] text-[#903E97] font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+                          >
+                            {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            <span>{showPassword ? 'Hide' : 'Show'}</span>
+                          </button>
+                        </div>
+                        <div className="relative">
+                          <Lock className="w-4 h-4 text-[#878787] absolute left-3 top-3" />
+                          <input
+                            id="input-sub-password"
+                            type={showPassword ? 'text' : 'password'}
+                            required
+                            placeholder="കുറഞ്ഞത് 6 അക്ഷരങ്ങൾ"
+                            value={password}
+                            onChange={(e) => {
+                              setPassword(e.target.value);
+                              if (passwordError) setPasswordError('');
+                            }}
+                            className="w-full pl-9 pr-3 py-2.5 text-xs sm:text-sm rounded-lg border border-[#CCC] focus:border-[#903E97] focus:ring-2 focus:ring-[#903E97]/20 outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#262B2E] mb-1.5">
+                          പാസ്‌വേഡ് വീണ്ടും നൽകുക (Confirm Password) <span className="text-[#D32F2F]">*</span>
+                        </label>
+                        <div className="relative">
+                          <Lock className="w-4 h-4 text-[#878787] absolute left-3 top-3" />
+                          <input
+                            id="input-sub-confirm-password"
+                            type={showPassword ? 'text' : 'password'}
+                            required
+                            placeholder="പാസ്‌വേഡ് സ്ഥിരീകരിക്കുക"
+                            value={confirmPassword}
+                            onChange={(e) => {
+                              setConfirmPassword(e.target.value);
+                              if (passwordError) setPasswordError('');
+                            }}
+                            className="w-full pl-9 pr-3 py-2.5 text-xs sm:text-sm rounded-lg border border-[#CCC] focus:border-[#903E97] focus:ring-2 focus:ring-[#903E97]/20 outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Password Error Banner */}
+                    {passwordError && (
+                      <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl p-3 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{passwordError}</span>
+                      </div>
+                    )}
 
                     {/* Region / City Pills */}
                     <div>

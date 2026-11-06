@@ -45,10 +45,10 @@ export const MyAccountPage: React.FC<MyAccountPageProps> = ({
   const sub = user.subscription;
   const isSubscribed = sub && sub.status === 'active' && sub.daysRemaining > 0;
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const updated = updateUserProfile({ name, mobile, profession });
+      const updated = await updateUserProfile({ name, mobile, profession });
       onUpdateUser(updated);
       setIsEditing(false);
       setSaveSuccess(true);
@@ -333,3 +333,4 @@ export const MyAccountPage: React.FC<MyAccountPageProps> = ({
     </div>
   );
 };
+

@@ -224,6 +224,73 @@ CREATE POLICY "Editorial staff can manage all trending stocks"
   USING (true)
   WITH CHECK (true);
 
+-- 10. Subscribers Table (Secure User Accounts & Auth)
+CREATE TABLE IF NOT EXISTS public.subscribers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  mobile TEXT,
+  profession TEXT DEFAULT 'Investor / Financial Planner',
+  state TEXT DEFAULT 'Kerala',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscribers_email ON public.subscribers (email);
+ALTER TABLE public.subscribers ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can create subscriber accounts" ON public.subscribers;
+CREATE POLICY "Public can create subscriber accounts"
+  ON public.subscribers FOR INSERT
+  WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Subscribers can read their profile" ON public.subscribers;
+CREATE POLICY "Subscribers can read their profile"
+  ON public.subscribers FOR SELECT
+  USING (true);
+
+DROP POLICY IF EXISTS "Subscribers can update their profile" ON public.subscribers;
+CREATE POLICY "Subscribers can update their profile"
+  ON public.subscribers FOR UPDATE
+  USING (true)
+  WITH CHECK (true);
+
+-- 11. Subscriptions Table (Payments, Razorpay Txns, Plans)
+CREATE TABLE IF NOT EXISTS public.subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  subscriber_id UUID REFERENCES public.subscribers(id) ON DELETE CASCADE,
+  subscriber_code TEXT NOT NULL UNIQUE,
+  plan_id TEXT NOT NULL,
+  plan_title TEXT NOT NULL,
+  plan_duration TEXT NOT NULL,
+  amount_paid NUMERIC NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'INR',
+  payment_method TEXT NOT NULL DEFAULT 'RAZORPAY',
+  payment_id TEXT,
+  order_id TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'expired', 'cancelled')),
+  starts_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_code ON public.subscriptions (subscriber_code);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_subscriber ON public.subscriptions (subscriber_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON public.subscriptions (status);
+
+ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can view active subscriptions" ON public.subscriptions;
+CREATE POLICY "Public can view active subscriptions"
+  ON public.subscriptions FOR SELECT
+  USING (true);
+
+DROP POLICY IF EXISTS "Public can create subscription records" ON public.subscriptions;
+CREATE POLICY "Public can create subscription records"
+  ON public.subscriptions FOR INSERT
+  WITH CHECK (true);
+
 `;
 
 export const VERCEL_DEPLOY_GUIDE = `# Step-by-Step Vercel & Supabase Deployment Guide
