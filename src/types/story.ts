@@ -92,6 +92,7 @@ export interface Story {
   publishing_status: PublishingStatus;
   notification_status: NotificationStatus;
   display_order: number;
+  is_premium?: boolean; // Subscriber-only exclusive story
   language?: string; // e.g., 'en' | 'ml' | 'hi' | 'ta' | 'ar'
   source_type?: 'manual' | 'indianapi_news' | 'market_wire' | 'rss';
   source_url?: string;

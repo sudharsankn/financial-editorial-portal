@@ -12,27 +12,43 @@ import {
   Globe,
   TrendingUp,
   FileText,
+  Lock,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  ShieldCheck,
+  UserCheck,
 } from 'lucide-react';
 import { detectScript } from '../lib/grapheme';
 
 interface ArticleDetailProps {
   story: Story;
   relatedStories: Story[];
+  prevStory?: Story | null;
+  nextStory?: Story | null;
   onBack: () => void;
   onSelectRelated: (canonicalUrl: string) => void;
   onEditStory?: (story: Story) => void;
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
+  isSubscribed?: boolean;
+  onOpenSubscribe?: () => void;
+  onOpenSignIn?: () => void;
 }
 
 export const ArticleDetail: React.FC<ArticleDetailProps> = ({
   story,
   relatedStories,
+  prevStory = null,
+  nextStory = null,
   onBack,
   onSelectRelated,
   onEditStory,
   isBookmarked,
   onToggleBookmark,
+  isSubscribed = false,
+  onOpenSubscribe,
+  onOpenSignIn,
 }) => {
   const [copied, setCopied] = useState(false);
   const [localBookmarked, setLocalBookmarked] = useState(false);
@@ -42,6 +58,40 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
 
   const script = detectScript(story.heading);
   const isRTL = script.isRTL;
+
+  // Determine if this is a subscriber-only premium story
+  const isPremiumStory =
+    story.is_premium === true ||
+    ['Investment Insights', 'Special Coverage'].includes(story.section) ||
+    ['Stock Recommendations', 'Portfolio', 'Big Story'].includes(story.category);
+
+  // Story is locked if it is premium and reader is not an active subscriber
+  const isLocked = isPremiumStory && !isSubscribed;
+
+  // Helper to extract first 2 paragraphs for paywall preview
+  const getPreviewStoryContent = (html: string) => {
+    if (!html) return '<p>Story preview loading...</p>';
+    const parts = html.split(/(<\/p>)/i);
+    if (parts.length >= 4) {
+      return parts.slice(0, 4).join('');
+    }
+    return html.slice(0, 400) + '...';
+  };
+
+  // Keyboard navigation for Previous & Next story (legacy SwipeItem.js navigation)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+      if (e.key === 'ArrowLeft' && prevStory) {
+        onSelectRelated(prevStory.canonical_url);
+      } else if (e.key === 'ArrowRight' && nextStory) {
+        onSelectRelated(nextStory.canonical_url);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [prevStory, nextStory, onSelectRelated]);
 
   // Scroll to top when article loads
   useEffect(() => {
@@ -237,12 +287,78 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
         </div>
       </div>
 
-      {/* Full Article Content */}
-      <article
-        className="prose prose-slate max-w-none mb-10 text-[#1E2229] leading-relaxed multilingual-lead [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-[#1E2229] [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-[#1E2229] [&_h3]:mt-6 [&_h3]:mb-2 [&_p]:mb-4 [&_p]:text-base [&_p]:text-[#1E2229] [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_blockquote]:border-l-4 [&_blockquote]:border-[#6A1B9A] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[#58606E] [&_a]:text-[#6A1B9A] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#7B1FA2]"
-        dir={isRTL ? 'rtl' : 'ltr'}
-        dangerouslySetInnerHTML={{ __html: story.full_story || '<p>Story content pending editorial review.</p>' }}
-      />
+      {/* Paywall Container or Full Article Content */}
+      {isLocked ? (
+        <div className="relative mb-10">
+          {/* Preview Story Content (First 2 paragraphs) */}
+          <div
+            className="prose prose-slate max-w-none text-[#1E2229] leading-relaxed multilingual-lead [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-[#1E2229] [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-[#1E2229] [&_h3]:mt-6 [&_h3]:mb-2 [&_p]:mb-4 [&_p]:text-base [&_p]:text-[#1E2229] [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_blockquote]:border-l-4 [&_blockquote]:border-[#6A1B9A] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[#58606E]"
+            dir={isRTL ? 'rtl' : 'ltr'}
+            dangerouslySetInnerHTML={{ __html: getPreviewStoryContent(story.full_story) }}
+          />
+
+          {/* Bottom Gradient Fade Overlay */}
+          <div className="h-32 -mt-20 relative bg-gradient-to-t from-[#F8F9FA] via-[#F8F9FA]/90 to-transparent pointer-events-none" />
+
+          {/* Subscriber Exclusive Paywall Card */}
+          <div className="relative -mt-6 p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-[#FAF5FF] via-white to-[#F3E8FF] border border-[#E9D5FF] shadow-lg text-center">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#903E97] text-white shadow-md mb-4 ring-8 ring-[#903E97]/10">
+              <Lock className="w-6 h-6" />
+            </div>
+
+            <div className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-[#903E97] bg-[#903E97]/10 mb-2">
+              വരിക്കാർക്ക് മാത്രമുള്ള പ്രത്യേക ലേഖനം • Subscriber Exclusive
+            </div>
+
+            <h3 className="text-xl sm:text-2xl font-bold text-[#1E2229] mb-2 font-['Open_Sans']">
+              തുടർന്ന് വായിക്കാൻ സബ്സ്ക്രൈബ് ചെയ്യുക
+            </h3>
+
+            <p className="text-sm text-[#58606E] max-w-xl mx-auto mb-6 leading-relaxed">
+              ഈ ലേഖനം പൂർണ്ണമായി വായിക്കാൻ ദയവായി ഹെഡ്ജ് ഓഹരി സബ്സ്ക്രൈബ് ചെയ്യുക അല്ലെങ്കിൽ ലോഗിൻ ചെയ്യുക. വിദഗ്ദ്ധരുടെ ഓഹരി നിർദ്ദേശങ്ങളും വിപണി വിശകലനങ്ങളും ആദ്യമറിയാം.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={onOpenSubscribe}
+                className="w-full sm:w-auto px-7 py-3 rounded-xl bg-gradient-to-r from-[#903E97] to-[#792f80] text-white font-bold text-sm shadow-md hover:shadow-lg hover:from-[#792f80] hover:to-[#63226a] transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>സബ്സ്ക്രൈബ് ചെയ്യുക (Starts ₹150)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onOpenSignIn}
+                className="w-full sm:w-auto px-6 py-3 rounded-xl border border-[#903E97]/40 text-[#903E97] hover:bg-[#903E97]/5 font-bold text-sm transition-colors cursor-pointer flex items-center justify-center gap-2"
+              >
+                <UserCheck className="w-4 h-4" />
+                <span>ഇതിനകം വരിക്കാരാണോ? ലോഗിൻ ചെയ്യുക</span>
+              </button>
+            </div>
+
+            <p className="text-[11px] text-[#8A92A0] mt-4 flex items-center justify-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#0E8A54]" />
+              <span>Instant Razorpay Activation • Cancel Anytime • 100% Secure</span>
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {isPremiumStory && (
+            <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0E8A54]/10 border border-[#0E8A54]/30 text-[#0E8A54] text-xs font-bold">
+              <ShieldCheck className="w-4 h-4" />
+              <span>✓ പ്രീമിയം സബ്സ്ക്രിപ്ഷൻ ആക്സസ് അൺലോക്ക് ചെയ്തു (Full Access Unlocked)</span>
+            </div>
+          )}
+          <article
+            className="prose prose-slate max-w-none mb-10 text-[#1E2229] leading-relaxed multilingual-lead [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-[#1E2229] [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-[#1E2229] [&_h3]:mt-6 [&_h3]:mb-2 [&_p]:mb-4 [&_p]:text-base [&_p]:text-[#1E2229] [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_blockquote]:border-l-4 [&_blockquote]:border-[#6A1B9A] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[#58606E] [&_a]:text-[#6A1B9A] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#7B1FA2]"
+            dir={isRTL ? 'rtl' : 'ltr'}
+            dangerouslySetInnerHTML={{ __html: story.full_story || '<p>Story content pending editorial review.</p>' }}
+          />
+        </>
+      )}
 
       {/* Keywords / Tags */}
       {keywordsArray.length > 0 && (
@@ -260,6 +376,61 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
                 #{keyword}
               </span>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Previous & Next Story Navigation (Hedge Ohari Legacy Swipe / Reader Navigation) */}
+      {(prevStory || nextStory) && (
+        <div className="pt-6 pb-6 border-t border-[#E2E4E8] mb-8">
+          <div className="flex items-center justify-between text-xs text-[#8A92A0] mb-3 font-semibold">
+            <span>Navigate Stories (← / → arrow keys supported)</span>
+            <span>Hedge Ohari Reader</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {prevStory ? (
+              <button
+                type="button"
+                onClick={() => onSelectRelated(prevStory.canonical_url)}
+                className="group flex items-start gap-3 p-3.5 rounded-xl border border-[#E2E4E8] hover:border-[#903E97] bg-white hover:bg-[#FAF7FC] transition-all text-left shadow-xs cursor-pointer"
+              >
+                <div className="mt-1 flex-shrink-0 w-8 h-8 rounded-full bg-[#FAF7FC] group-hover:bg-[#903E97] text-[#903E97] group-hover:text-white flex items-center justify-center transition-colors">
+                  <ChevronLeft className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#903E97] block mb-0.5">
+                    &larr; മുൻപത്തെ ലേഖനം (Previous)
+                  </span>
+                  <h4 className="text-xs sm:text-sm font-bold text-[#1E2229] group-hover:text-[#903E97] line-clamp-2 leading-snug">
+                    {prevStory.heading}
+                  </h4>
+                </div>
+              </button>
+            ) : (
+              <div className="hidden sm:block" />
+            )}
+
+            {nextStory ? (
+              <button
+                type="button"
+                onClick={() => onSelectRelated(nextStory.canonical_url)}
+                className="group flex items-start justify-between gap-3 p-3.5 rounded-xl border border-[#E2E4E8] hover:border-[#903E97] bg-white hover:bg-[#FAF7FC] transition-all text-right shadow-xs cursor-pointer"
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#903E97] block mb-0.5">
+                    അടുത്ത ലേഖനം (Next) &rarr;
+                  </span>
+                  <h4 className="text-xs sm:text-sm font-bold text-[#1E2229] group-hover:text-[#903E97] line-clamp-2 leading-snug">
+                    {nextStory.heading}
+                  </h4>
+                </div>
+                <div className="mt-1 flex-shrink-0 w-8 h-8 rounded-full bg-[#FAF7FC] group-hover:bg-[#903E97] text-[#903E97] group-hover:text-white flex items-center justify-center transition-colors">
+                  <ChevronRight className="w-5 h-5" />
+                </div>
+              </button>
+            ) : (
+              <div className="hidden sm:block" />
+            )}
           </div>
         </div>
       )}

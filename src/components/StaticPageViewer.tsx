@@ -377,3 +377,4 @@ export const StaticPageViewer: React.FC<StaticPageViewerProps> = ({
     </div>
   );
 };
+

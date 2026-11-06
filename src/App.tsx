@@ -208,8 +208,11 @@ export default function App() {
         setActiveArticle(story);
         setLoading(false);
       });
+      if (publishedStories.length === 0) {
+        loadSubscriberStories();
+      }
     }
-  }, [currentView, currentCanonicalUrl]);
+  }, [currentView, currentCanonicalUrl, publishedStories.length, loadSubscriberStories]);
 
   // Handle URL / Browser History synchronization
   useEffect(() => {
@@ -311,6 +314,23 @@ export default function App() {
         (s) => s.id !== activeArticle.id && s.section === activeArticle.section
       )
     : [];
+
+  // Previous & Next navigation stories for active article (legacy SwipeItem.js reader navigation)
+  const currentArticleIndex =
+    activeArticle && publishedStories.length > 0
+      ? publishedStories.findIndex((s) => s.id === activeArticle.id)
+      : -1;
+  const prevStory = currentArticleIndex > 0 ? publishedStories[currentArticleIndex - 1] : null;
+  const nextStory =
+    currentArticleIndex >= 0 && currentArticleIndex < publishedStories.length - 1
+      ? publishedStories[currentArticleIndex + 1]
+      : null;
+
+  // Active subscriber status check
+  const isReaderSubscribed = Boolean(
+    currentUser?.subscription?.status === 'active' ||
+      (typeof window !== 'undefined' && localStorage.getItem('hedge_is_subscribed') === 'true')
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F2F2F2] text-[#262B2E] font-['Open_Sans',_sans-serif]">
@@ -433,6 +453,11 @@ export default function App() {
           <ArticleDetail
             story={activeArticle}
             relatedStories={relatedStories}
+            prevStory={prevStory}
+            nextStory={nextStory}
+            isSubscribed={isReaderSubscribed}
+            onOpenSubscribe={() => handleNavigate('subscribe')}
+            onOpenSignIn={() => setSignInModalOpen(true)}
             onBack={() => handleNavigate('feed')}
             onSelectRelated={handleSelectStory}
             onEditStory={(story) => {
