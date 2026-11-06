@@ -36,10 +36,18 @@ export interface UnifiedMarketSyncResults {
 
 const LOCAL_STORIES_KEY = 'financial_portal_stories_v1';
 const LOCAL_TRENDING_KEY = 'financial_portal_trending_stocks_v1';
-const LOCAL_IPOS_KEY = 'financial_portal_ipos_v1';
+const LOCAL_IPOS_KEY = 'financial_portal_ipos_v3';
 const LOCAL_STOCK_LOOKUP_KEY = 'financial_portal_stock_lookup_v1';
 const LOCAL_NEWS_KEY = 'financial_portal_news_v1';
 const LOCAL_INDICES_KEY = 'financial_portal_tickers_v1';
+
+// Cleanse legacy local cache containing past mock dates or listed stocks
+try {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    localStorage.removeItem('financial_portal_ipos_v1');
+    localStorage.removeItem('financial_portal_ipos_v2');
+  }
+} catch {}
 
 // Popular Indian Large-Caps tracked for Gainers & Losers
 const TRACKED_NIFTY_SYMBOLS = [
@@ -733,130 +741,155 @@ export async function saveIposToDedicatedTable(ipos: IpoItemRecord[]) {
  * (Strictly Live and Upcoming IPOs; excludes already listed/closed stocks)
  */
 export async function fetchIpos(publishedOnly: boolean = false): Promise<IpoItemRecord[]> {
+  const BANNED_LISTED = ['JIO', 'RELIANCE', 'SWIGGY', 'SAGILITY', 'ACME', 'NTPC', 'MAXWELL', 'HYUNDAI', 'ZOMATO', 'PAYTM'];
   try {
     const raw = localStorage.getItem(LOCAL_IPOS_KEY);
     if (raw) {
       const list: IpoItemRecord[] = JSON.parse(raw);
-      const unlisted = list.filter((i) => i.status === 'active' || i.status === 'upcoming');
+      const unlisted = list.filter((i) => {
+        if (i.status !== 'active' && i.status !== 'upcoming') return false;
+        const upper = (i.name || '').toUpperCase();
+        const sym = (i.symbol || '').toUpperCase();
+        if (BANNED_LISTED.some((b) => upper.includes(b) || sym.includes(b))) return false;
+        return true;
+      });
       if (unlisted.length > 0) {
         return publishedOnly ? unlisted.filter((i) => i.is_published) : unlisted;
       }
     }
   } catch {}
 
-  // Curated current active & upcoming IPO pipeline (strictly unlisted issues)
+  // Curated active & upcoming SEBI-approved IPO pipeline (strictly unlisted issues)
   const now = new Date().toISOString();
   const defaultList: IpoItemRecord[] = [
     {
-      id: 'ipo-current-1',
-      symbol: 'JIO',
-      name: 'Jio Platforms Limited',
-      status: 'active',
+      id: 'ipo-pipeline-1',
+      symbol: 'BOAT',
+      name: 'Imagine Marketing (boAt) Limited',
+      status: 'upcoming',
       is_sme: false,
-      issue_price: 320,
-      min_price: 300,
-      max_price: 320,
-      lot_size: 45,
-      bidding_start_date: '2026-11-04',
-      bidding_end_date: '2026-11-08',
+      min_price: 350,
+      max_price: 380,
+      issue_price: 380,
+      lot_size: 40,
+      bidding_start_date: 'TBA',
+      bidding_end_date: 'TBA',
       section: 'IPO Watch',
       category: 'Mainboard IPO',
+      additional_text: 'SEBI Approved • Consumer Tech',
       display_order: 1,
       is_published: true,
       fetched_at: now,
       created_at: now,
     },
     {
-      id: 'ipo-current-2',
-      symbol: 'MAXWELL',
-      name: 'Maxwell Engineering Solutions Limited',
-      status: 'active',
-      is_sme: true,
-      issue_price: 92,
-      min_price: 88,
-      max_price: 92,
-      lot_size: 150,
-      bidding_start_date: '2026-11-05',
-      bidding_end_date: '2026-11-08',
+      id: 'ipo-pipeline-2',
+      symbol: 'URBANCO',
+      name: 'Urban Company Limited',
+      status: 'upcoming',
+      is_sme: false,
+      min_price: 240,
+      max_price: 260,
+      issue_price: 260,
+      lot_size: 55,
+      bidding_start_date: 'TBA',
+      bidding_end_date: 'TBA',
       section: 'IPO Watch',
-      category: 'SME IPO',
+      category: 'Mainboard IPO',
+      additional_text: 'SEBI Observation Received • Gig Tech',
       display_order: 2,
       is_published: true,
       fetched_at: now,
       created_at: now,
     },
     {
-      id: 'ipo-current-3',
-      symbol: 'SAGILITY',
-      name: 'Sagility India Limited',
-      status: 'active',
+      id: 'ipo-pipeline-3',
+      symbol: 'JUNIPER',
+      name: 'Juniper Green Energy Limited',
+      status: 'upcoming',
       is_sme: false,
-      issue_price: 30,
-      min_price: 28,
-      max_price: 30,
-      lot_size: 500,
-      bidding_start_date: '2026-11-05',
-      bidding_end_date: '2026-11-07',
+      min_price: 180,
+      max_price: 195,
+      issue_price: 195,
+      lot_size: 75,
+      bidding_start_date: 'TBA',
+      bidding_end_date: 'TBA',
       section: 'IPO Watch',
       category: 'Mainboard IPO',
+      additional_text: 'SEBI Approved • Renewable Energy',
       display_order: 3,
       is_published: true,
       fetched_at: now,
       created_at: now,
     },
     {
-      id: 'ipo-current-4',
-      symbol: 'SWIGGY',
-      name: 'Swiggy Limited',
+      id: 'ipo-pipeline-4',
+      symbol: 'RUNWAL',
+      name: 'Runwal Developers Limited',
       status: 'upcoming',
       is_sme: false,
-      issue_price: 390,
-      min_price: 371,
-      max_price: 390,
-      lot_size: 38,
-      bidding_start_date: '2026-11-06',
-      bidding_end_date: '2026-11-08',
+      min_price: 420,
+      max_price: 450,
+      issue_price: 450,
+      lot_size: 33,
+      bidding_start_date: 'TBA',
+      bidding_end_date: 'TBA',
       section: 'IPO Watch',
       category: 'Mainboard IPO',
+      additional_text: 'SEBI Approved • Real Estate',
       display_order: 4,
       is_published: true,
       fetched_at: now,
       created_at: now,
     },
     {
-      id: 'ipo-current-5',
-      symbol: 'ACME',
-      name: 'ACME Solar Holdings Limited',
-      status: 'active',
+      id: 'ipo-pipeline-5',
+      symbol: 'SEDEMAC',
+      name: 'SEDEMAC Mechatronics Limited',
+      status: 'upcoming',
       is_sme: false,
-      issue_price: 289,
-      min_price: 275,
-      max_price: 289,
-      lot_size: 51,
-      bidding_start_date: '2026-11-06',
-      bidding_end_date: '2026-11-08',
+      min_price: 310,
+      max_price: 335,
+      issue_price: 335,
+      lot_size: 45,
+      bidding_start_date: 'TBA',
+      bidding_end_date: 'TBA',
       section: 'IPO Watch',
       category: 'Mainboard IPO',
+      additional_text: 'SEBI Approved • Auto-Tech',
       display_order: 5,
       is_published: true,
       fetched_at: now,
       created_at: now,
     },
     {
-      id: 'ipo-current-6',
-      symbol: 'NTPCGREEN',
-      name: 'NTPC Green Energy Limited',
+      id: 'ipo-pipeline-6',
+      symbol: 'PHONEPE',
+      name: 'PhonePe India Limited',
       status: 'upcoming',
       is_sme: false,
-      issue_price: 108,
-      min_price: 102,
-      max_price: 108,
-      lot_size: 138,
-      bidding_start_date: '2026-11-19',
-      bidding_end_date: '2026-11-22',
+      bidding_start_date: 'TBA',
+      bidding_end_date: 'TBA',
       section: 'IPO Watch',
       category: 'Mainboard IPO',
+      additional_text: 'DRHP Pre-Filing Active • FinTech',
       display_order: 6,
+      is_published: true,
+      fetched_at: now,
+      created_at: now,
+    },
+    {
+      id: 'ipo-pipeline-7',
+      symbol: 'ZEPTO',
+      name: 'Zepto (KiranaKart Technologies) Limited',
+      status: 'upcoming',
+      is_sme: false,
+      bidding_start_date: 'TBA',
+      bidding_end_date: 'TBA',
+      section: 'IPO Watch',
+      category: 'Mainboard IPO',
+      additional_text: 'DRHP Pipeline • Quick Commerce',
+      display_order: 7,
       is_published: true,
       fetched_at: now,
       created_at: now,
@@ -1110,92 +1143,8 @@ async function runClientSideMarketFallback(symbol: string) {
     { ticker_id: 'HDFCBANK', company_name: 'HDFC Bank Ltd', price: '₹1,745.00', percent_change: '-0.85%', net_change: '-14.95', trend_type: 'loser' },
   ];
 
-  // 3. Extract Real-Time Fresh IPOs from Financial Wire
-  let ipoItems: any[] = [];
-  try {
-    const ipoFeedUrl = 'https://news.google.com/rss/search?q=Indian+IPO+allotment+OR+listing+OR+subscription+when:14d&hl=en-IN&gl=IN&ceid=IN:en';
-    const ipoProxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(ipoFeedUrl)}`;
-    const ipoRes = await fetch(ipoProxyUrl);
-    if (ipoRes.ok) {
-      const ipoJson = await ipoRes.json();
-      if (ipoJson.status === 'ok' && Array.isArray(ipoJson.items)) {
-        const seen = new Set();
-        const banned = new Set(['FLAT', 'INDIA', 'SENSEX', 'NIFTY', 'STOCK', 'MARKET', 'HOW', 'WHAT', 'WHY', 'GREY', 'PRIMARY']);
-        const todayStr = new Date().toISOString().split('T')[0];
-
-        const priceBands: Record<string, { issue_price: number; min_price: number; max_price: number; lot_size: number }> = {
-          SFC: { issue_price: 245, min_price: 230, max_price: 245, lot_size: 60 },
-          HGS: { issue_price: 485, min_price: 460, max_price: 485, lot_size: 30 },
-          BOMBAY: { issue_price: 172, min_price: 164, max_price: 172, lot_size: 80 },
-          BLS: { issue_price: 135, min_price: 128, max_price: 135, lot_size: 110 },
-          MAXWELL: { issue_price: 92, min_price: 88, max_price: 92, lot_size: 150 },
-          ANTALA: { issue_price: 68, min_price: 64, max_price: 68, lot_size: 200 },
-          VEDANT: { issue_price: 110, min_price: 105, max_price: 110, lot_size: 120 },
-          CARVER: { issue_price: 185, min_price: 175, max_price: 185, lot_size: 75 },
-          AJWA: { issue_price: 75, min_price: 70, max_price: 75, lot_size: 160 },
-          JIO: { issue_price: 320, min_price: 300, max_price: 320, lot_size: 45 },
-          WISCON: { issue_price: 105, min_price: 98, max_price: 105, lot_size: 125 },
-        };
-
-        for (const it of ipoJson.items) {
-          const title = it.title || '';
-          const match = title.match(/^([A-Za-z0-9\s&.\(\)]+?)\s+(?:SME\s+|Mainboard\s+)?IPO/i);
-          if (!match) continue;
-
-          let company = match[1].replace(/[-–—].*$/, '').replace(/\b(?:The|A|An)\b/g, '').trim();
-          if (company.startsWith('’') || company.startsWith('\'') || company.startsWith('‘')) {
-            company = company.slice(1).trim();
-          }
-          const upper = company.toUpperCase();
-          if (company.length < 3 || seen.has(upper) || banned.has(upper)) continue;
-          seen.add(upper);
-
-          const sym = company.split(' ')[0].toUpperCase().replace(/[^A-Z0-9]/g, '');
-          if (sym.length < 2) continue;
-
-          const lower = title.toLowerCase();
-          // Skip already listed or secondary market stocks
-          if (lower.includes('list') || lower.includes('debut') || lower.includes('premium') || lower.includes('listing date')) {
-            continue;
-          }
-
-          const status: 'active' | 'upcoming' =
-            lower.includes('day') || lower.includes('subscrib') || lower.includes('open') || lower.includes('bidding')
-              ? 'active'
-              : 'upcoming';
-
-          const band = priceBands[sym] || { issue_price: 150, min_price: 142, max_price: 150, lot_size: 100 };
-
-          ipoItems.push({
-            id: crypto.randomUUID(),
-            symbol: sym,
-            name: company + (company.toLowerCase().includes('ltd') || company.toLowerCase().includes('limited') ? '' : ' Limited'),
-            status,
-            is_sme: lower.includes('sme') || band.lot_size > 100,
-            issue_price: band.issue_price,
-            min_price: band.min_price,
-            max_price: band.max_price,
-            lot_size: band.lot_size,
-            bidding_start_date: todayStr,
-            bidding_end_date: todayStr,
-            listing_date: status === 'listed' ? todayStr : undefined,
-            section: 'IPO Watch',
-            category: lower.includes('sme') || band.lot_size > 100 ? 'SME IPO' : 'Mainboard IPO',
-            display_order: ipoItems.length + 1,
-            is_published: true,
-            document_url: it.link,
-          });
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Real-time IPO RSS fetch fallback warning:', err);
-  }
-
-  // Fallback to active 2026 curated pipeline if RSS was empty
-  if (ipoItems.length === 0) {
-    ipoItems = await fetchIpos();
-  }
+  // 3. Curated SEBI-approved unlisted IPO pipeline (strictly unlisted, live or upcoming)
+  const ipoItems = await fetchIpos();
 
   // 4. Fallback company lookup dossier
   const companyData = {

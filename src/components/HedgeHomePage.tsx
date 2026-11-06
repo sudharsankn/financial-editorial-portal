@@ -1063,7 +1063,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                             }`}
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-[#0E8A54]" />
-                            Open Now
+                            Open Now ({unlistedIpos.filter((i) => i.status === 'active').length})
                           </button>
                           <button
                             id="btn-ipos-upcoming"
@@ -1076,7 +1076,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                             }`}
                           >
                             <Calendar className="w-3 h-3" />
-                            Upcoming Pipeline
+                            Upcoming Pipeline ({unlistedIpos.filter((i) => i.status === 'upcoming').length})
                           </button>
                         </div>
 
@@ -1093,73 +1093,97 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
                       {/* IPO Cards Grid */}
                       <div id="grid-upcoming-ipos" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5">
-                        {filteredIpos.slice(0, 6).map((ipo) => {
-                          const isOpen = ipo.status === 'active';
-                          const isUpcoming = ipo.status === 'upcoming';
-                          const priceDisplay =
-                            ipo.min_price && ipo.max_price && ipo.min_price !== ipo.max_price
-                              ? `₹${ipo.min_price} - ₹${ipo.max_price}`
-                              : `₹${ipo.issue_price || ipo.max_price || 0}`;
+                        {filteredIpos.length === 0 ? (
+                          <div className="col-span-full py-8 px-4 text-center text-xs text-[#676A6C] bg-[#FAF7FC]/50 rounded-lg border border-dashed border-[#E6E6E6]">
+                            <Rocket className="w-6 h-6 text-[#903E97]/40 mx-auto mb-2" />
+                            <p className="font-bold text-[#262B2E]">
+                              {ipoFilter === 'active'
+                                ? 'ഇന്ന് സബ്‌സ്‌ക്രിപ്ഷനായി പുതിയ ഐപിഒകൾ ലഭ്യമല്ല'
+                                : 'ഐപിഒകൾ ലഭ്യമല്ല'}
+                            </p>
+                            <p className="text-[11px] text-[#676A6C] mt-1 max-w-md mx-auto">
+                              {ipoFilter === 'active'
+                                ? 'No Mainboard/SME IPOs are currently open for subscription today. Switch to the Upcoming Pipeline tab to track upcoming issues awaiting bidding dates.'
+                                : 'No upcoming IPOs found in this category.'}
+                            </p>
+                          </div>
+                        ) : (
+                          filteredIpos.slice(0, 6).map((ipo) => {
+                            const isOpen = ipo.status === 'active';
+                            const isUpcoming = ipo.status === 'upcoming';
+                            const priceDisplay =
+                              ipo.min_price && ipo.max_price && ipo.min_price !== ipo.max_price
+                                ? `₹${ipo.min_price} - ₹${ipo.max_price}`
+                                : `₹${ipo.issue_price || ipo.max_price || 0}`;
 
-                          return (
-                            <div
-                              key={ipo.id}
-                              id={`card-ipo-${ipo.id}`}
-                              className="p-3.5 rounded border border-[#E6E6E6] bg-white hover:border-[#903E97]/40 hover:shadow-2xs transition-all flex flex-col justify-between"
-                            >
-                              <div className="flex items-start justify-between gap-2 mb-2">
+                            return (
+                              <div
+                                key={ipo.id}
+                                id={`card-ipo-${ipo.id}`}
+                                className="p-3.5 rounded border border-[#E6E6E6] bg-white hover:border-[#903E97]/40 hover:shadow-2xs transition-all flex flex-col justify-between"
+                              >
                                 <div>
-                                  <div className="flex items-center gap-1.5 mb-1">
-                                    <span className="font-extrabold text-xs text-[#262B2E]">
-                                      {ipo.name}
+                                  <div className="flex items-start justify-between gap-2 mb-2">
+                                    <div>
+                                      <div className="flex items-center gap-1.5 mb-1">
+                                        <span className="font-extrabold text-xs text-[#262B2E]">
+                                          {ipo.name}
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] font-semibold text-[#903E97]">
+                                        {ipo.is_sme ? 'SME IPO' : 'Mainboard IPO'} &bull; {ipo.symbol}
+                                      </span>
+                                    </div>
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 ${
+                                        isOpen
+                                          ? 'bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30'
+                                          : isUpcoming
+                                          ? 'bg-[#FFF3E0] text-[#E65100] border border-[#E65100]/30'
+                                          : 'bg-[#F2F2F2] text-[#676A6C]'
+                                      }`}
+                                    >
+                                      {isOpen ? 'Open Now' : isUpcoming ? 'Upcoming' : 'Listed'}
                                     </span>
                                   </div>
-                                  <span className="text-[10px] font-semibold text-[#903E97]">
-                                    {ipo.is_sme ? 'SME IPO' : 'Mainboard IPO'} &bull; {ipo.symbol}
-                                  </span>
-                                </div>
-                                <span
-                                  className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 ${
-                                    isOpen
-                                      ? 'bg-[#E8F5EE] text-[#0E8A54] border border-[#0E8A54]/30'
-                                      : isUpcoming
-                                      ? 'bg-[#FFF3E0] text-[#E65100] border border-[#E65100]/30'
-                                      : 'bg-[#F2F2F2] text-[#676A6C]'
-                                  }`}
-                                >
-                                  {isOpen ? 'Open Now' : isUpcoming ? 'Upcoming' : 'Listed'}
-                                </span>
-                              </div>
 
-                              <div className="space-y-1.5 pt-2 border-t border-[#F2F2F2] text-[11px]">
-                                <div className="flex justify-between">
-                                  <span className="text-[#676A6C]">Price Band:</span>
-                                  <span className="font-bold tabular-nums text-[#262B2E]">
-                                    {priceDisplay}
-                                  </span>
+                                  {ipo.additional_text && (
+                                    <p className="text-[10px] text-[#58606E] bg-[#FAF7FC] px-2 py-1 rounded border border-[#F2F2F2] mb-2 font-medium">
+                                      {ipo.additional_text}
+                                    </p>
+                                  )}
                                 </div>
-                                {ipo.lot_size && (
+
+                                <div className="space-y-1.5 pt-2 border-t border-[#F2F2F2] text-[11px]">
                                   <div className="flex justify-between">
-                                    <span className="text-[#676A6C]">Lot Size:</span>
-                                    <span className="font-semibold text-[#262B2E]">
-                                      {ipo.lot_size} Shares
+                                    <span className="text-[#676A6C]">Price Band:</span>
+                                    <span className="font-bold tabular-nums text-[#262B2E]">
+                                      {priceDisplay}
                                     </span>
                                   </div>
-                                )}
-                                {ipo.bidding_end_date && (
-                                  <div className="flex justify-between text-[10px]">
-                                    <span className="text-[#878787]">
-                                      {isOpen ? 'Closes on:' : 'Bidding:'}
-                                    </span>
-                                    <span className="font-medium text-[#262B2E]">
-                                      {ipo.bidding_end_date}
-                                    </span>
-                                  </div>
-                                )}
+                                  {ipo.lot_size && (
+                                    <div className="flex justify-between">
+                                      <span className="text-[#676A6C]">Lot Size:</span>
+                                      <span className="font-semibold text-[#262B2E]">
+                                        {ipo.lot_size} Shares
+                                      </span>
+                                    </div>
+                                  )}
+                                  {ipo.bidding_end_date && (
+                                    <div className="flex justify-between text-[10px]">
+                                      <span className="text-[#878787]">
+                                        {isOpen ? 'Closes on:' : 'Bidding:'}
+                                      </span>
+                                      <span className="font-medium text-[#262B2E]">
+                                        {ipo.bidding_end_date}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })
+                        )}
                       </div>
                     </div>
                   )}

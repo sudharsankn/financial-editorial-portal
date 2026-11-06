@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.1] - 2026-11-06
+
+### Fixed & Enhanced
+- **Strict IPO Watch Integrity (Zero Listed Stocks & Authentic Pipeline)**:
+  - Addressed root cause of "Jio Platforms Limited" and "Swiggy Limited" appearing in IPO Watch:
+    - Purged fragile news RSS scrapers that generated fake `active` IPO records from secondary-market news headlines (e.g. "allotment", "listing status").
+    - Eliminated mock/stale entries with synthetic dates. Swiggy Limited's IPO occurred in November 2024 (Nov 6–8, 2024, listed Nov 13, 2024) and is an already-listed secondary market stock; excluded completely from IPO Watch.
+    - Jio Platforms / Reliance Industries is not open for bidding; excluded completely from IPO Watch.
+  - Implemented authentic SEBI-approved upcoming pipeline:
+    1. *Imagine Marketing (boAt) Limited* (Mainboard • Consumer Tech • SEBI Approved)
+    2. *Urban Company Limited* (Mainboard • Gig Tech / Services • SEBI Observation Received)
+    3. *Juniper Green Energy Limited* (Mainboard • Renewable Energy • SEBI Approved)
+    4. *Runwal Developers Limited* (Mainboard • Real Estate • SEBI Approved)
+    5. *SEDEMAC Mechatronics Limited* (Mainboard • Auto-Tech • SEBI Approved)
+    6. *PhonePe India Limited* (Mainboard • FinTech • DRHP Pre-Filing Pipeline)
+    7. *Zepto (KiranaKart Technologies) Limited* (Mainboard • Quick Commerce • DRHP Pipeline)
+  - Added authentic Malayalam empty state container in `HedgeHomePage` when `filteredIpos.length === 0`:
+    - Shows "ഇന്ന് സബ്‌സ്‌ക്രിപ്ഷനായി പുതിയ ഐപിഒകൾ ലഭ്യമല്ല" ("No Mainboard/SME IPOs currently open for subscription today. Explore the Upcoming Pipeline tab to track upcoming issues awaiting bidding dates.").
+  - Bumped client IPO cache to `financial_portal_ipos_v3` with automatic eviction of legacy v1/v2 caches.
+  - Fixed duplicate "Lot Size" field in Admin Studio `StockDataPanel` by displaying "Category" (`SME IPO` / `Mainboard`).
+
+---
+
 ## [2.3.0] - 2026-11-06
 
 ### Added

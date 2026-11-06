@@ -752,8 +752,8 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
                         <span className="font-bold text-[#1E2229]">{ipo.lot_size ? `${ipo.lot_size} shares` : '—'}</span>
                       </div>
                       <div>
-                        <span className="text-[#8A92A0] block">Lot Size</span>
-                        <span className="font-semibold text-[#1E2229]">{ipo.lot_size ? `${ipo.lot_size} shares` : '—'}</span>
+                        <span className="text-[#8A92A0] block">Category</span>
+                        <span className="font-semibold text-[#1E2229]">{ipo.category || (ipo.is_sme ? 'SME IPO' : 'Mainboard')}</span>
                       </div>
                       <div>
                         <span className="text-[#8A92A0] block">Bidding Dates</span>
