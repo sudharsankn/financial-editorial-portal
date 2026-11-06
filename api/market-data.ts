@@ -232,6 +232,8 @@ async function scrapeLiveIpoTable(): Promise<any[]> {
           : cells[0].toLowerCase().includes('upcoming')
           ? 'upcoming'
           : 'closed';
+        // Only Live (open/active) and Upcoming IPOs should be included in IPO Watch; exclude closed/listed
+        if (statusRaw === 'closed') continue;
         if (nameRaw.length < 3 || seen.has(nameRaw.toUpperCase())) continue;
         seen.add(nameRaw.toUpperCase());
 
@@ -510,13 +512,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const sym = company.split(' ')[0].toUpperCase().replace(/[^A-Z0-9]/g, '');
         if (sym.length < 2) continue;
 
-        let status: 'active' | 'upcoming' | 'listed' = 'upcoming';
         const lower = title.toLowerCase();
-        if (lower.includes('list') || lower.includes('debut') || lower.includes('premium')) {
-          status = 'listed';
-        } else if (lower.includes('day') || lower.includes('subscrib') || lower.includes('open') || lower.includes('bidding') || lower.includes('allotment')) {
-          status = 'active';
+        // Skip already listed or secondary market stocks
+        if (lower.includes('list') || lower.includes('debut') || lower.includes('premium') || lower.includes('listing date')) {
+          continue;
         }
+
+        const status: 'active' | 'upcoming' =
+          lower.includes('day') || lower.includes('subscrib') || lower.includes('open') || lower.includes('bidding')
+            ? 'active'
+            : 'upcoming';
 
         finalIpos.push({
           id: `ipo-news-${finalIpos.length + 1}`,

@@ -68,8 +68,8 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
   const [savingNewsId, setSavingNewsId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Filter for IPO sub-tab
-  const [ipoFilter, setIpoFilter] = useState<'all' | 'active' | 'upcoming' | 'listed'>('all');
+  // Filter for IPO sub-tab (strictly live/active and upcoming issues only)
+  const [ipoFilter, setIpoFilter] = useState<'all' | 'active' | 'upcoming'>('all');
 
   const refreshPanelData = async () => {
     setLoading(true);
@@ -132,8 +132,14 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
     }
   };
 
+  // Strictly Live (active) and Upcoming IPOs; exclude listed stocks
+  const liveAndUpcomingIpos = ipos.filter(
+    (item) => item.status === 'active' || item.status === 'upcoming'
+  );
   const filteredIpos =
-    ipoFilter === 'all' ? ipos : ipos.filter((item) => item.status === ipoFilter);
+    ipoFilter === 'all'
+      ? liveAndUpcomingIpos
+      : liveAndUpcomingIpos.filter((item) => item.status === ipoFilter);
 
   return (
     <div className="space-y-6">
@@ -248,7 +254,7 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
             <Calendar className="w-4 h-4 text-[#0E8A54]" />
             <span>IPOs (Section: IPO Watch)</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white border border-[#E2E4E8] font-mono">
-              {ipos.length}
+              {liveAndUpcomingIpos.length}
             </span>
           </button>
         </div>
@@ -680,13 +686,13 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
                   <span>IPO Watch Hub</span>
                 </h3>
                 <p className="text-xs text-[#58606E]">
-                  Dedicated Section: <strong>IPO Watch</strong> • Saved in <code className="text-xs font-mono">public.ipos</code> • Status: <strong>Published</strong>
+                  Dedicated Section: <strong>IPO Watch</strong> • Live &amp; Upcoming Issues • Refreshed Live
                 </p>
               </div>
 
               {/* IPO Sub-filter */}
               <div className="flex items-center gap-1 bg-[#F4F4F6] p-0.5 rounded border border-[#E2E4E8] text-xs">
-                {(['all', 'active', 'upcoming', 'listed'] as const).map((filterKey) => (
+                {(['all', 'active', 'upcoming'] as const).map((filterKey) => (
                   <button
                     key={filterKey}
                     type="button"
@@ -697,7 +703,7 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
                         : 'text-[#58606E] hover:text-[#1E2229]'
                     }`}
                   >
-                    {filterKey}
+                    {filterKey === 'all' ? 'All (Live & Upcoming)' : filterKey === 'active' ? 'Live (Open)' : 'Upcoming'}
                   </button>
                 ))}
               </div>

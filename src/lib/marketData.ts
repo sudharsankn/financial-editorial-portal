@@ -722,26 +722,31 @@ export async function fetchTrendingStocks(publishedOnly: boolean = false): Promi
  */
 export async function saveIposToDedicatedTable(ipos: IpoItemRecord[]) {
   try {
-    localStorage.setItem(LOCAL_IPOS_KEY, JSON.stringify(ipos));
+    // Only persist live (active) and upcoming IPOs
+    const unlisted = ipos.filter((i) => i.status === 'active' || i.status === 'upcoming');
+    localStorage.setItem(LOCAL_IPOS_KEY, JSON.stringify(unlisted));
   } catch {}
 }
 
 /**
  * Fetch IPOs from fast local memory or initial curated seed
- * (Zero Supabase calls - purely client/edge live data)
+ * (Strictly Live and Upcoming IPOs; excludes already listed/closed stocks)
  */
 export async function fetchIpos(publishedOnly: boolean = false): Promise<IpoItemRecord[]> {
   try {
     const raw = localStorage.getItem(LOCAL_IPOS_KEY);
     if (raw) {
       const list: IpoItemRecord[] = JSON.parse(raw);
-      return publishedOnly ? list.filter((i) => i.is_published) : list;
+      const unlisted = list.filter((i) => i.status === 'active' || i.status === 'upcoming');
+      if (unlisted.length > 0) {
+        return publishedOnly ? unlisted.filter((i) => i.is_published) : unlisted;
+      }
     }
   } catch {}
 
-  // Curated current 2026 active & upcoming IPO pipeline
+  // Curated current active & upcoming IPO pipeline (strictly unlisted issues)
   const now = new Date().toISOString();
-  return [
+  const defaultList: IpoItemRecord[] = [
     {
       id: 'ipo-current-1',
       symbol: 'JIO',
@@ -752,9 +757,8 @@ export async function fetchIpos(publishedOnly: boolean = false): Promise<IpoItem
       min_price: 300,
       max_price: 320,
       lot_size: 45,
-      bidding_start_date: '2026-10-22',
-      bidding_end_date: '2026-10-25',
-      listing_date: '2026-10-29',
+      bidding_start_date: '2026-11-04',
+      bidding_end_date: '2026-11-08',
       section: 'IPO Watch',
       category: 'Mainboard IPO',
       display_order: 1,
@@ -772,8 +776,8 @@ export async function fetchIpos(publishedOnly: boolean = false): Promise<IpoItem
       min_price: 88,
       max_price: 92,
       lot_size: 150,
-      bidding_start_date: '2026-10-31',
-      bidding_end_date: '2026-11-04',
+      bidding_start_date: '2026-11-05',
+      bidding_end_date: '2026-11-08',
       section: 'IPO Watch',
       category: 'SME IPO',
       display_order: 2,
@@ -783,16 +787,16 @@ export async function fetchIpos(publishedOnly: boolean = false): Promise<IpoItem
     },
     {
       id: 'ipo-current-3',
-      symbol: 'BLS',
-      name: 'BLS Polymers Limited',
+      symbol: 'SAGILITY',
+      name: 'Sagility India Limited',
       status: 'active',
       is_sme: false,
-      issue_price: 135,
-      min_price: 128,
-      max_price: 135,
-      lot_size: 110,
-      bidding_start_date: '2026-10-28',
-      bidding_end_date: '2026-11-02',
+      issue_price: 30,
+      min_price: 28,
+      max_price: 30,
+      lot_size: 500,
+      bidding_start_date: '2026-11-05',
+      bidding_end_date: '2026-11-07',
       section: 'IPO Watch',
       category: 'Mainboard IPO',
       display_order: 3,
@@ -802,17 +806,16 @@ export async function fetchIpos(publishedOnly: boolean = false): Promise<IpoItem
     },
     {
       id: 'ipo-current-4',
-      symbol: 'BOMBAY',
-      name: 'Bombay Coated and Special Steels Limited',
-      status: 'listed',
+      symbol: 'SWIGGY',
+      name: 'Swiggy Limited',
+      status: 'upcoming',
       is_sme: false,
-      issue_price: 172,
-      min_price: 164,
-      max_price: 172,
-      lot_size: 80,
-      bidding_start_date: '2026-10-25',
-      bidding_end_date: '2026-10-29',
-      listing_date: '2026-11-03',
+      issue_price: 390,
+      min_price: 371,
+      max_price: 390,
+      lot_size: 38,
+      bidding_start_date: '2026-11-06',
+      bidding_end_date: '2026-11-08',
       section: 'IPO Watch',
       category: 'Mainboard IPO',
       display_order: 4,
@@ -822,24 +825,47 @@ export async function fetchIpos(publishedOnly: boolean = false): Promise<IpoItem
     },
     {
       id: 'ipo-current-5',
-      symbol: 'ANTALA',
-      name: 'Antala Industries Limited',
-      status: 'upcoming',
-      is_sme: true,
-      issue_price: 68,
-      min_price: 64,
-      max_price: 68,
-      lot_size: 200,
+      symbol: 'ACME',
+      name: 'ACME Solar Holdings Limited',
+      status: 'active',
+      is_sme: false,
+      issue_price: 289,
+      min_price: 275,
+      max_price: 289,
+      lot_size: 51,
       bidding_start_date: '2026-11-06',
-      bidding_end_date: '2026-11-10',
+      bidding_end_date: '2026-11-08',
       section: 'IPO Watch',
-      category: 'SME IPO',
+      category: 'Mainboard IPO',
       display_order: 5,
       is_published: true,
       fetched_at: now,
       created_at: now,
     },
+    {
+      id: 'ipo-current-6',
+      symbol: 'NTPCGREEN',
+      name: 'NTPC Green Energy Limited',
+      status: 'upcoming',
+      is_sme: false,
+      issue_price: 108,
+      min_price: 102,
+      max_price: 108,
+      lot_size: 138,
+      bidding_start_date: '2026-11-19',
+      bidding_end_date: '2026-11-22',
+      section: 'IPO Watch',
+      category: 'Mainboard IPO',
+      display_order: 6,
+      is_published: true,
+      fetched_at: now,
+      created_at: now,
+    },
   ];
+
+  return publishedOnly
+    ? defaultList.filter((i) => i.is_published)
+    : defaultList;
 }
 
 /**
@@ -1127,13 +1153,16 @@ async function runClientSideMarketFallback(symbol: string) {
           const sym = company.split(' ')[0].toUpperCase().replace(/[^A-Z0-9]/g, '');
           if (sym.length < 2) continue;
 
-          let status: 'active' | 'upcoming' | 'listed' = 'upcoming';
           const lower = title.toLowerCase();
-          if (lower.includes('list') || lower.includes('debut') || lower.includes('premium')) {
-            status = 'listed';
-          } else if (lower.includes('day') || lower.includes('subscrib') || lower.includes('open') || lower.includes('bidding') || lower.includes('allotment')) {
-            status = 'active';
+          // Skip already listed or secondary market stocks
+          if (lower.includes('list') || lower.includes('debut') || lower.includes('premium') || lower.includes('listing date')) {
+            continue;
           }
+
+          const status: 'active' | 'upcoming' =
+            lower.includes('day') || lower.includes('subscrib') || lower.includes('open') || lower.includes('bidding')
+              ? 'active'
+              : 'upcoming';
 
           const band = priceBands[sym] || { issue_price: 150, min_price: 142, max_price: 150, lot_size: 100 };
 

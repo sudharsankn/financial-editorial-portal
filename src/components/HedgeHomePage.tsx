@@ -340,16 +340,20 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
     return effectiveTrending;
   }, [effectiveTrending, moversFilter]);
 
-  // Filtered IPOs
+  // Filtered IPOs: strictly Live (active) and Upcoming issues only; excludes listed/closed
+  const unlistedIpos = useMemo(() => {
+    return ipos.filter((i) => i.status === 'active' || i.status === 'upcoming');
+  }, [ipos]);
+
   const filteredIpos = useMemo(() => {
     if (ipoFilter === 'active') {
-      return ipos.filter((i) => i.status === 'active');
+      return unlistedIpos.filter((i) => i.status === 'active');
     }
     if (ipoFilter === 'upcoming') {
-      return ipos.filter((i) => i.status === 'upcoming');
+      return unlistedIpos.filter((i) => i.status === 'upcoming');
     }
-    return ipos;
-  }, [ipos, ipoFilter]);
+    return unlistedIpos;
+  }, [unlistedIpos, ipoFilter]);
 
   // Top Gainer, Top Loser & Featured IPO with strict sorting
   const topGainer = useMemo(() => {
@@ -373,12 +377,12 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
   }, [effectiveTrending]);
 
   const featuredIpo = useMemo(() => {
-    const openIpo = ipos.find((i) => i.status === 'active');
+    const openIpo = unlistedIpos.find((i) => i.status === 'active');
     if (openIpo) return openIpo;
-    const upcomingIpo = ipos.find((i) => i.status === 'upcoming');
+    const upcomingIpo = unlistedIpos.find((i) => i.status === 'upcoming');
     if (upcomingIpo) return upcomingIpo;
-    return ipos[0] || null;
-  }, [ipos]);
+    return unlistedIpos[0] || null;
+  }, [unlistedIpos]);
 
   const mainIndex = useMemo(() => {
     return effectiveIndices.find((i) => i.symbol === 'NIFTY 50') || effectiveIndices[0];
@@ -1046,7 +1050,7 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                                 : 'bg-[#F2F2F2] text-[#676A6C] hover:text-[#262B2E]'
                             }`}
                           >
-                            All IPOs ({ipos.length})
+                            All IPOs ({unlistedIpos.length})
                           </button>
                           <button
                             id="btn-ipos-active"
