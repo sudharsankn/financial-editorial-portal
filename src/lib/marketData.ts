@@ -6,7 +6,7 @@
  */
 
 import { Story, TrendingStockItem, IpoItemRecord, NewsItemRecord, MarketTickerItem } from '../types/story';
-import { getSupabaseClient, fetchMarketTickers } from './supabase';
+import { getSupabaseClient, fetchMarketTickers, fetchAllStoriesForAdmin } from './supabase';
 import { countGraphemes, generateCanonicalSlug } from './grapheme';
 
 export interface UnifiedMarketSyncResults {
@@ -563,6 +563,188 @@ export async function mergeNewsIntoStories(newsArticles: any[]): Promise<number>
   } catch { }
 
   return storiesToInsert.length;
+}
+
+/**
+ * Automatically fetch live market news stories from financial wires,
+ * filter out ALL duplicates against existing stories (by canonical slug, heading, and source URL),
+ * and insert them directly into Stories in 'Published' mode.
+ */
+export async function fetchAndAutoPublishWireStories(): Promise<{
+  success: boolean;
+  publishedCount: number;
+  duplicateCount: number;
+  totalFetched: number;
+  stories: Story[];
+  error?: string;
+}> {
+  try {
+    // 1. Fetch live market sync (to get fresh news articles)
+    const syncRes = await executeUnifiedMarketSync('RELIANCE');
+    const newsItems = syncRes?.news?.items || [];
+
+    if (!Array.isArray(newsItems) || newsItems.length === 0) {
+      return {
+        success: true,
+        publishedCount: 0,
+        duplicateCount: 0,
+        totalFetched: 0,
+        stories: [],
+        error: 'No news articles returned from financial wire feeds.',
+      };
+    }
+
+    // 2. Fetch all existing stories from database and local storage to prevent duplicates
+    const existingStories = await fetchAllStoriesForAdmin();
+
+    // Normalization helper to detect title duplicates across whitespace/punctuation
+    const normalize = (str: string) =>
+      str
+        .toLowerCase()
+        .normalize('NFC')
+        .replace(/[\s\t\n\r_\\/|.,:;!?'"()[\]{}@#$%^&*+=<>~`-]+/g, '')
+        .trim();
+
+    const existingSlugs = new Set<string>();
+    const existingHeadings = new Set<string>();
+    const existingUrls = new Set<string>();
+
+    for (const s of existingStories) {
+      if (s.canonical_url) existingSlugs.add(s.canonical_url.toLowerCase().trim());
+      if (s.heading) existingHeadings.add(normalize(s.heading));
+      if (s.source_url) existingUrls.add(s.source_url.toLowerCase().trim());
+    }
+
+    // Also check current localStorage stories
+    try {
+      const rawLocal = localStorage.getItem(LOCAL_STORIES_KEY);
+      if (rawLocal) {
+        const localList: Story[] = JSON.parse(rawLocal);
+        for (const s of localList) {
+          if (s.canonical_url) existingSlugs.add(s.canonical_url.toLowerCase().trim());
+          if (s.heading) existingHeadings.add(normalize(s.heading));
+          if (s.source_url) existingUrls.add(s.source_url.toLowerCase().trim());
+        }
+      }
+    } catch { }
+
+    const batchSeenSlugs = new Set<string>();
+    const batchSeenHeadings = new Set<string>();
+    const storiesToPublish: Story[] = [];
+    let duplicateCount = 0;
+    const now = new Date().toISOString();
+
+    for (const item of newsItems) {
+      const rawTitle = String(item.title || '').trim();
+      if (!rawTitle || rawTitle.length < 5) continue;
+
+      const normHeading = normalize(rawTitle);
+      const slug = generateCanonicalSlug(rawTitle);
+      const itemUrl = (item.url || '').toLowerCase().trim();
+
+      // DUPLICATE CHECKS:
+      // 1. Slug matches existing story or current batch
+      // 2. Heading matches existing story or current batch
+      // 3. Source URL matches existing story
+      const isDuplicate =
+        (slug && (existingSlugs.has(slug) || batchSeenSlugs.has(slug))) ||
+        existingHeadings.has(normHeading) ||
+        batchSeenHeadings.has(normHeading) ||
+        (itemUrl && existingUrls.has(itemUrl));
+
+      if (isDuplicate) {
+        duplicateCount++;
+        continue;
+      }
+
+      // Mark as seen in this batch
+      if (slug) batchSeenSlugs.add(slug);
+      batchSeenHeadings.add(normHeading);
+      if (itemUrl) existingUrls.add(itemUrl);
+
+      // Enforce 70-grapheme maximum on heading
+      let heading = rawTitle;
+      if (countGraphemes(heading) > 70) {
+        heading = Array.from(heading).slice(0, 67).join('') + '...';
+      }
+
+      const summaryText = item.summary || rawTitle;
+      const leadImg =
+        item.image_url ||
+        'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=800&q=80';
+
+      const fullStoryHtml = `
+        <h2>${rawTitle}</h2>
+        <p class="lead">${summaryText}</p>
+        <p>Market analysts and institutional desks are actively tracking these developments as key Indian indices respond to sectoral rotations and macroeconomic indicators.</p>
+        <p>Financial advisors emphasize evaluating long-term portfolio asset allocation and consulting certified research before making investment decisions.</p>
+        ${item.url ? `<p><a href="${item.url}" target="_blank" rel="noopener noreferrer">Read original wire dispatch on ${item.source || 'Financial Wire Desk'} &rarr;</a></p>` : ''}
+      `.trim();
+
+      const newStory: Story = {
+        id: crypto.randomUUID(),
+        section: 'Market News',
+        category: 'Market Trends',
+        heading,
+        lead_image_url: leadImg,
+        short_description: `<p>${summaryText}</p>`,
+        full_story: fullStoryHtml,
+        canonical_url: slug,
+        keywords: `Market News, Market Trends, ${item.source || 'Financial Wire'}, Stocks, Indian Economy`,
+        seo_title: rawTitle,
+        seo_description: summaryText.slice(0, 160),
+        publishing_status: 'Published', // STRICTLY PUBLISHED MODE
+        notification_status: 'Yes',
+        display_order: 1,
+        source_type: 'market_wire',
+        source_url: item.url,
+        published_at: now,
+        created_at: item.pub_date || now,
+        updated_at: now,
+      };
+
+      storiesToPublish.push(newStory);
+    }
+
+    // Persist to Supabase if available
+    const client = getSupabaseClient();
+    if (client && storiesToPublish.length > 0) {
+      try {
+        for (const story of storiesToPublish) {
+          await client.from('stories').upsert(story, { onConflict: 'canonical_url' });
+        }
+      } catch (err) {
+        console.warn('Supabase auto-publish upsert warning:', err);
+      }
+    }
+
+    // Persist to Local Storage
+    if (storiesToPublish.length > 0) {
+      try {
+        const rawLocal = localStorage.getItem(LOCAL_STORIES_KEY);
+        const localStories: Story[] = rawLocal ? JSON.parse(rawLocal) : [];
+        const merged = [...storiesToPublish, ...localStories];
+        localStorage.setItem(LOCAL_STORIES_KEY, JSON.stringify(merged));
+      } catch { }
+    }
+
+    return {
+      success: true,
+      publishedCount: storiesToPublish.length,
+      duplicateCount,
+      totalFetched: newsItems.length,
+      stories: storiesToPublish,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      publishedCount: 0,
+      duplicateCount: 0,
+      totalFetched: 0,
+      stories: [],
+      error: err?.message || 'Failed executing auto-publish',
+    };
+  }
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   saveNewsItemToDatabase,
   fetchSavedNews,
   UnifiedMarketSyncResults,
+  fetchAndAutoPublishWireStories,
 } from '../lib/marketData';
 import { formatTimeAgo } from '../lib/timeAgo';
 import {
@@ -36,6 +37,7 @@ import {
   BookmarkPlus,
   Check,
   Bookmark,
+  Send,
 } from 'lucide-react';
 
 interface StockDataPanelProps {
@@ -51,6 +53,7 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
 }) => {
   // Sync state
   const [syncing, setSyncing] = useState(false);
+  const [autoPublishing, setAutoPublishing] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<UnifiedMarketSyncResults | null>(null);
 
   // Active view tab after fetch (Market News Wire is default)
@@ -110,6 +113,44 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
       onNotify?.({
         type: 'error',
         text: res.error || 'Failed to fetch market data.',
+      });
+    }
+  };
+
+  // 1-Click Fetch & Auto-Publish Live Stories directly into Stories table (Published mode) with strict duplicate prevention
+  const handleFetchAndAutoPublish = async () => {
+    setAutoPublishing(true);
+    try {
+      const res = await fetchAndAutoPublishWireStories();
+      setAutoPublishing(false);
+
+      if (res.success) {
+        if (res.publishedCount > 0) {
+          onNotify?.({
+            type: 'success',
+            text: `🎉 Successfully published ${res.publishedCount} new stories to the portal! (${res.duplicateCount} duplicates safely skipped).`,
+          });
+        } else {
+          onNotify?.({
+            type: 'success',
+            text: `All ${res.totalFetched} wire stories are already published. 0 duplicates added.`,
+          });
+        }
+        await refreshPanelData();
+        if (onRefreshAllData) {
+          await onRefreshAllData();
+        }
+      } else {
+        onNotify?.({
+          type: 'error',
+          text: res.error || 'Failed to auto-publish stories.',
+        });
+      }
+    } catch (err: any) {
+      setAutoPublishing(false);
+      onNotify?.({
+        type: 'error',
+        text: err?.message || 'Error occurred while publishing stories.',
       });
     }
   };
@@ -179,13 +220,14 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
         </div>
 
         {/* 1-Click Action Bar */}
-        <div className="pt-4 flex items-center justify-end">
+        <div className="pt-4 flex flex-wrap items-center justify-end gap-3">
+          {/* Button 1: Fetch Data on Click */}
           <button
             id="btn-fetch-unified-data"
             type="button"
             onClick={handleSingleClickFetch}
-            disabled={syncing}
-            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white text-xs font-bold transition-all shadow-sm hover:shadow disabled:opacity-50"
+            disabled={syncing || autoPublishing}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white text-xs font-bold transition-all shadow-sm hover:shadow disabled:opacity-50 cursor-pointer"
           >
             {syncing ? (
               <>
@@ -196,6 +238,28 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
               <>
                 <Sparkles className="w-4 h-4" />
                 <span>Fetch Data on Click</span>
+              </>
+            )}
+          </button>
+
+          {/* Button 2: NEW - Fetch & Publish Stories (Auto-Publish without duplicates) */}
+          <button
+            id="btn-fetch-and-publish-stories"
+            type="button"
+            onClick={handleFetchAndAutoPublish}
+            disabled={syncing || autoPublishing}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded bg-[#0E8A54] hover:bg-[#0B6E43] text-white text-xs font-bold transition-all shadow-sm hover:shadow disabled:opacity-50 cursor-pointer"
+            title="Automatically fetch live financial wire stories and publish them directly without any duplicates"
+          >
+            {autoPublishing ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Publishing Stories...</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                <span>Fetch &amp; Publish Stories</span>
               </>
             )}
           </button>

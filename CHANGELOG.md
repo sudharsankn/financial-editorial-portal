@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.2] - 2026-11-06
+
+### Added
+- **1-Click "Fetch & Publish Stories" Engine (`#btn-fetch-and-publish-stories`)**:
+  - Added dedicated emerald button right next to **"Fetch Data on Click"** in the Admin Studio Market News Wire.
+  - Automatically fetches fresh financial wire dispatches and directly creates stories in **`Published`** mode (`publishing_status = 'Published'`).
+  - **Strict Multi-Layer Duplicate Prevention**:
+    1. *Canonical Slug Validation*: checks `canonical_url` against all existing database and local store stories.
+    2. *Normalized Unicode Heading Check*: compares normalized NFC titles stripped of whitespace and punctuation.
+    3. *Source URL De-duplication*: matches original wire article links (`source_url`).
+    4. *In-Batch De-duplication*: prevents duplicates within the incoming RSS stream.
+  - Automatically truncates headings to $\le 70$ graphemes (`Intl.Segmenter`) with clean ellipses.
+  - Dual persistence to Supabase `public.stories` and browser local store with instant UI refresh.
+
+---
+
 ## [2.3.1] - 2026-11-06
 
 ### Fixed & Enhanced
