@@ -95,13 +95,30 @@ export const AdminAdsManager: React.FC = () => {
     } catch {}
   };
 
+  const calculateDaysDifference = (startDateStr: string, endDateStr: string): number => {
+    if (!startDateStr || !endDateStr) return 1;
+    const start = new Date(startDateStr);
+    const end = new Date(endDateStr);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return 1;
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 1;
+  };
+
   const handleOpenAddModal = () => {
     const nextNum = Math.floor(75 + campaigns.length);
+    const start = new Date().toISOString().slice(0, 10);
+    const end = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const days = calculateDaysDifference(start, end);
+    const costPerDay = 100;
     setFormData({
       ...initialFormState,
       campaign_id: `OH000${nextNum}`,
-      start_date: new Date().toISOString().slice(0, 10),
-      end_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+      start_date: start,
+      end_date: end,
+      number_of_days: days,
+      cost_per_day: costPerDay,
+      total_cost: days * costPerDay,
     });
     setEditingCampaign(null);
     setUploadSuccessNotice(null);
@@ -109,23 +126,74 @@ export const AdminAdsManager: React.FC = () => {
   };
 
   const handleOpenEditModal = (ad: AdCampaign) => {
-    setFormData({ ...ad });
+    const days = calculateDaysDifference(ad.start_date, ad.end_date);
+    const cost = days * (ad.cost_per_day || 0);
+    setFormData({
+      ...ad,
+      number_of_days: ad.number_of_days || days,
+      total_cost: ad.total_cost || cost,
+    });
     setEditingCampaign(ad);
     setUploadSuccessNotice(null);
     setModalOpen(true);
   };
 
-  const handleDaysChange = (days: number) => {
-    const cost = (formData.cost_per_day || 0) * days;
+  const handleStartDateChange = (newStartDate: string) => {
+    let newEndDate = formData.end_date;
+    if (newStartDate && newEndDate && newStartDate > newEndDate) {
+      const start = new Date(newStartDate);
+      if (!isNaN(start.getTime())) {
+        const daysToAdd = Math.max(1, formData.number_of_days || 30);
+        newEndDate = new Date(start.getTime() + daysToAdd * 86400000).toISOString().slice(0, 10);
+      }
+    }
+    const days = calculateDaysDifference(newStartDate, newEndDate);
+    const cost = days * (formData.cost_per_day || 0);
     setFormData((prev) => ({
       ...prev,
+      start_date: newStartDate,
+      end_date: newEndDate,
       number_of_days: days,
       total_cost: cost,
     }));
   };
 
+  const handleEndDateChange = (newEndDate: string) => {
+    let newStartDate = formData.start_date;
+    if (newStartDate && newEndDate && newEndDate < newStartDate) {
+      newStartDate = newEndDate;
+    }
+    const days = calculateDaysDifference(newStartDate, newEndDate);
+    const cost = days * (formData.cost_per_day || 0);
+    setFormData((prev) => ({
+      ...prev,
+      start_date: newStartDate,
+      end_date: newEndDate,
+      number_of_days: days,
+      total_cost: cost,
+    }));
+  };
+
+  const handleDaysChange = (days: number) => {
+    const safeDays = Math.max(1, days || 1);
+    const cost = (formData.cost_per_day || 0) * safeDays;
+    let newEndDate = formData.end_date;
+    if (formData.start_date) {
+      const start = new Date(formData.start_date);
+      if (!isNaN(start.getTime())) {
+        newEndDate = new Date(start.getTime() + safeDays * 86400000).toISOString().slice(0, 10);
+      }
+    }
+    setFormData((prev) => ({
+      ...prev,
+      number_of_days: safeDays,
+      end_date: newEndDate,
+      total_cost: cost,
+    }));
+  };
+
   const handleCostPerDayChange = (costPerDay: number) => {
-    const cost = costPerDay * (formData.number_of_days || 1);
+    const cost = (costPerDay || 0) * (formData.number_of_days || 1);
     setFormData((prev) => ({
       ...prev,
       cost_per_day: costPerDay,
@@ -392,6 +460,9 @@ export const AdminAdsManager: React.FC = () => {
                     </div>
                     <div className="text-[10px] text-[#8A92A0]">
                       {ad.number_of_days} Days @ ₹{ad.cost_per_day}/day
+                    </div>
+                    <div className="text-[11px] font-bold text-[#0E8A54] mt-0.5">
+                      Total: ₹{Number(ad.total_cost || ((ad.number_of_days || 1) * (ad.cost_per_day || 0))).toLocaleString('en-IN')}
                     </div>
                   </td>
 
@@ -663,56 +734,99 @@ export const AdminAdsManager: React.FC = () => {
                   />
                 </div>
 
-                {/* Row 4: Flight Dates & Costing */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-[#E2E4E8]">
-                  <div>
-                    <label className="text-[10px] font-bold text-[#58606E] uppercase block mb-1">
-                      Start Date
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.start_date}
-                      onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                      className="w-full px-2 py-1.5 bg-[#FAF7FC] border border-[#E2E4E8] rounded-lg text-xs"
-                    />
+                {/* Row 4: Flight Dates & Costing with Auto-calculated Total Cost */}
+                <div className="bg-[#FAF7FC] p-3.5 rounded-xl border border-[#EADDF0] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-[#1E2229] uppercase tracking-wider flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-[#903E97]" />
+                      <span>തീയതികളും ചെലവും (Dates &amp; Costing)</span>
+                    </span>
+                    <span className="text-[10px] text-[#0E8A54] font-bold bg-[#E8F5EE] border border-[#0E8A54]/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span>✓ Total Cost Auto-Calculated</span>
+                    </span>
                   </div>
 
-                  <div>
-                    <label className="text-[10px] font-bold text-[#58606E] uppercase block mb-1">
-                      End Date
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.end_date}
-                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                      className="w-full px-2 py-1.5 bg-[#FAF7FC] border border-[#E2E4E8] rounded-lg text-xs"
-                    />
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                    <div>
+                      <label className="text-[10px] font-bold text-[#58606E] uppercase block mb-1">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.start_date}
+                        onChange={(e) => handleStartDateChange(e.target.value)}
+                        className="w-full px-2 py-1.5 bg-white border border-[#E2E4E8] rounded-lg text-xs outline-none focus:border-[#903E97]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-[#58606E] uppercase block mb-1">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.end_date}
+                        onChange={(e) => handleEndDateChange(e.target.value)}
+                        className="w-full px-2 py-1.5 bg-white border border-[#E2E4E8] rounded-lg text-xs outline-none focus:border-[#903E97]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-[#58606E] uppercase block mb-1">
+                        Days (ദിവസം)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={formData.number_of_days}
+                        onChange={(e) => handleDaysChange(Number(e.target.value))}
+                        className="w-full px-2 py-1.5 bg-white border border-[#E2E4E8] rounded-lg text-xs font-semibold outline-none focus:border-[#903E97]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-[#58606E] uppercase block mb-1">
+                        Cost / Day (₹)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={formData.cost_per_day}
+                        onChange={(e) => handleCostPerDayChange(Number(e.target.value))}
+                        className="w-full px-2 py-1.5 bg-white border border-[#E2E4E8] rounded-lg text-xs outline-none focus:border-[#903E97]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-[#58606E] uppercase block mb-1 flex items-center justify-between">
+                        <span>Total Cost (₹)</span>
+                        <span className="text-[9px] text-[#0E8A54] font-bold">Auto</span>
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={formData.total_cost}
+                        onChange={(e) =>
+                          setFormData({ ...formData, total_cost: Number(e.target.value) })
+                        }
+                        className="w-full px-2 py-1.5 bg-[#F4FBF7] border border-[#0E8A54]/40 rounded-lg text-xs font-bold text-[#0E8A54] outline-none focus:border-[#0E8A54]"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="text-[10px] font-bold text-[#58606E] uppercase block mb-1">
-                      Cost Per Day (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.cost_per_day}
-                      onChange={(e) => handleCostPerDayChange(Number(e.target.value))}
-                      className="w-full px-2 py-1.5 bg-white border border-[#E2E4E8] rounded-lg text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-[#58606E] uppercase block mb-1">
-                      Total Cost (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.total_cost}
-                      onChange={(e) => setFormData({ ...formData, total_cost: Number(e.target.value) })}
-                      className="w-full px-2 py-1.5 bg-[#FAF7FC] border border-[#E2E4E8] rounded-lg text-xs font-bold text-[#0E8A54]"
-                    />
+                  {/* Dynamic calculation summary badge */}
+                  <div className="flex flex-wrap items-center justify-between text-[11px] text-[#676A6C] pt-1.5 border-t border-[#EADDF0]">
+                    <span>
+                      കാലാവധി: <strong className="text-[#1E2229] font-semibold">{formData.number_of_days || 1} Days</strong>
+                    </span>
+                    <span className="text-[#0E8A54] font-medium">
+                      ({formData.number_of_days || 1} days × ₹{formData.cost_per_day || 0}) = 
+                      <strong className="text-sm font-bold ml-1.5 text-[#0E8A54]">
+                        ₹{Number(formData.total_cost || 0).toLocaleString('en-IN')}
+                      </strong>
+                    </span>
                   </div>
                 </div>
 
@@ -881,9 +995,14 @@ export const AdminAdsManager: React.FC = () => {
                 {/* Preview Metadata Pill */}
                 <div className="mt-4 pt-3 border-t border-[#EADDF0] flex items-center justify-between text-[10px] text-[#878787]">
                   <span>Destination: {formData.display_ad_url || 'Not set'}</span>
-                  <span className="font-mono text-[#0E8A54] font-bold">
-                    ₹{formData.cost_per_day}/day
-                  </span>
+                  <div className="text-right">
+                    <span className="font-mono text-[#0E8A54] font-bold">
+                      ₹{formData.cost_per_day}/day
+                    </span>
+                    <span className="text-[10px] text-[#58606E] ml-1.5 font-semibold">
+                      • Total: ₹{Number(formData.total_cost || 0).toLocaleString('en-IN')} ({formData.number_of_days}d)
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
