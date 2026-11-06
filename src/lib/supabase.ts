@@ -96,6 +96,13 @@ function getLocalStories(): Story[] {
     if (raw) {
       const parsed: Story[] = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
+        const existingIds = new Set(parsed.map((s) => s.id));
+        const missingSeed = INITIAL_STORIES.filter((s) => !existingIds.has(s.id));
+        if (missingSeed.length > 0) {
+          const merged = [...missingSeed, ...parsed];
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
+          return merged;
+        }
         return parsed;
       }
     }
