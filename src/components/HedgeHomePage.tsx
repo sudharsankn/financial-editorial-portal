@@ -125,6 +125,8 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
   const [storySearchQuery, setStorySearchQuery] = useState<string>('');
   const [selectedCategoryTag, setSelectedCategoryTag] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [filterStartDate, setFilterStartDate] = useState<string>('');
+  const [filterEndDate, setFilterEndDate] = useState<string>('');
   // Stories Listing Pagination
   const [storyPage, setStoryPage] = useState<number>(1);
   const [storiesPerPage, setStoriesPerPage] = useState<number>(8);
@@ -232,9 +234,34 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
         }
       }
 
+      // 4. Custom Date Range filter (Legacy Filters.js)
+      if (filterStartDate || filterEndDate) {
+        const dateStr = story.published_at || story.created_at;
+        if (dateStr) {
+          const storyTime = new Date(dateStr).getTime();
+          if (filterStartDate) {
+            const startTime = new Date(`${filterStartDate}T00:00:00`).getTime();
+            if (!isNaN(startTime) && storyTime < startTime) return false;
+          }
+          if (filterEndDate) {
+            const endTime = new Date(`${filterEndDate}T23:59:59`).getTime();
+            if (!isNaN(endTime) && storyTime > endTime) return false;
+          }
+        }
+      }
+
       return true;
     });
-  }, [stories, storySearchQuery, selectedCategoryTag, selectedMonth, showOnlyBookmarks, effectiveBookmarkedIds]);
+  }, [
+    stories,
+    storySearchQuery,
+    selectedCategoryTag,
+    selectedMonth,
+    filterStartDate,
+    filterEndDate,
+    showOnlyBookmarks,
+    effectiveBookmarkedIds,
+  ]);
 
   const totalStoryPages = Math.max(1, Math.ceil(displayedStories.length / storiesPerPage));
   const validStoryPage = Math.min(storyPage, totalStoryPages);
@@ -254,7 +281,15 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
 
   useEffect(() => {
     setStoryPage(1);
-  }, [storySearchQuery, selectedCategoryTag, selectedMonth, selectedSection, showOnlyBookmarks]);
+  }, [
+    storySearchQuery,
+    selectedCategoryTag,
+    selectedMonth,
+    filterStartDate,
+    filterEndDate,
+    selectedSection,
+    showOnlyBookmarks,
+  ]);
 
   const toggleBookmark = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -379,7 +414,11 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
               <h5 className="font-['Open_Sans'] font-extrabold text-xs text-[#262B2E] uppercase tracking-wider">
                 FIND STORIES
               </h5>
-              {(storySearchQuery || selectedCategoryTag !== 'all' || selectedMonth !== 'all') && (
+              {(storySearchQuery ||
+                selectedCategoryTag !== 'all' ||
+                selectedMonth !== 'all' ||
+                filterStartDate ||
+                filterEndDate) && (
                 <span className="w-2 h-2 rounded-full bg-[#903E97]" title="Active filter applied" />
               )}
             </div>
@@ -537,8 +576,108 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
               </div>
             )}
 
+            {/* Custom Date Range Filter (Legacy Filters.js) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-bold text-[#262B2E] uppercase tracking-wider flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-[#903E97]" />
+                  <span>Date Range (തീയതി)</span>
+                </label>
+                {(filterStartDate || filterEndDate) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterStartDate('');
+                      setFilterEndDate('');
+                      setStoryPage(1);
+                    }}
+                    className="text-[10px] text-[#903E97] hover:underline cursor-pointer"
+                  >
+                    Clear Dates
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Presets */}
+              <div className="grid grid-cols-3 gap-1 mb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date();
+                    const past = new Date();
+                    past.setDate(now.getDate() - 7);
+                    setFilterStartDate(past.toISOString().slice(0, 10));
+                    setFilterEndDate(now.toISOString().slice(0, 10));
+                    setStoryPage(1);
+                  }}
+                  className="px-1.5 py-1 text-[10px] font-semibold bg-[#FAF7FC] hover:bg-[#F3E5F5] border border-[#E6E6E6] rounded text-[#676A6C] hover:text-[#903E97] transition-colors cursor-pointer"
+                >
+                  7 Days
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date();
+                    const past = new Date();
+                    past.setDate(now.getDate() - 30);
+                    setFilterStartDate(past.toISOString().slice(0, 10));
+                    setFilterEndDate(now.toISOString().slice(0, 10));
+                    setStoryPage(1);
+                  }}
+                  className="px-1.5 py-1 text-[10px] font-semibold bg-[#FAF7FC] hover:bg-[#F3E5F5] border border-[#E6E6E6] rounded text-[#676A6C] hover:text-[#903E97] transition-colors cursor-pointer"
+                >
+                  30 Days
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date();
+                    setFilterStartDate(`${now.getFullYear()}-01-01`);
+                    setFilterEndDate(now.toISOString().slice(0, 10));
+                    setStoryPage(1);
+                  }}
+                  className="px-1.5 py-1 text-[10px] font-semibold bg-[#FAF7FC] hover:bg-[#F3E5F5] border border-[#E6E6E6] rounded text-[#676A6C] hover:text-[#903E97] transition-colors cursor-pointer"
+                >
+                  This Year
+                </button>
+              </div>
+
+              {/* Date Inputs: From & To */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <span className="text-[9px] text-[#878787] font-semibold block mb-0.5">From</span>
+                  <input
+                    type="date"
+                    value={filterStartDate}
+                    onChange={(e) => {
+                      setFilterStartDate(e.target.value);
+                      setStoryPage(1);
+                    }}
+                    className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-1.5 py-1 text-[11px] text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
+                  />
+                </div>
+                <div>
+                  <span className="text-[9px] text-[#878787] font-semibold block mb-0.5">To</span>
+                  <input
+                    type="date"
+                    value={filterEndDate}
+                    onChange={(e) => {
+                      setFilterEndDate(e.target.value);
+                      setStoryPage(1);
+                    }}
+                    className="w-full bg-[#FAF7FC] border border-[#E6E6E6] rounded px-1.5 py-1 text-[11px] text-[#262B2E] font-medium focus:border-[#903E97] outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Reset Filters */}
-            {(storySearchQuery || selectedCategoryTag !== 'all' || selectedMonth !== 'all' || selectedSection !== 'All') && (
+            {(storySearchQuery ||
+              selectedCategoryTag !== 'all' ||
+              selectedMonth !== 'all' ||
+              filterStartDate ||
+              filterEndDate ||
+              selectedSection !== 'All') && (
               <button
                 id={resetBtnId}
                 type="button"
@@ -546,6 +685,8 @@ export const HedgeHomePage: React.FC<HedgeHomePageProps> = ({
                   setStorySearchQuery('');
                   setSelectedCategoryTag('all');
                   setSelectedMonth('all');
+                  setFilterStartDate('');
+                  setFilterEndDate('');
                   onSelectSection('All');
                   setStoryPage(1);
                 }}

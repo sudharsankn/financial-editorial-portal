@@ -58,6 +58,40 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
   const [showSeoMeta, setShowSeoMeta] = useState(false);
   const [imgError, setImgError] = useState(false);
 
+  // Accessibility Font Size state for Malayalam readability
+  type FontSizeOption = 'small' | 'normal' | 'large' | 'xlarge';
+  const [fontSize, setFontSize] = useState<FontSizeOption>(() => {
+    try {
+      const saved = localStorage.getItem('hedge_reader_font_size');
+      if (saved === 'small' || saved === 'normal' || saved === 'large' || saved === 'xlarge') {
+        return saved;
+      }
+    } catch {}
+    return 'normal';
+  });
+
+  // Reading progress bar state (0 to 100%)
+  const [readingProgress, setReadingProgress] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (totalHeight > 0) {
+        const progress = Math.min(100, Math.max(0, (window.scrollY / totalHeight) * 100));
+        setReadingProgress(progress);
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const handleSetFontSize = (size: FontSizeOption) => {
+    setFontSize(size);
+    try {
+      localStorage.setItem('hedge_reader_font_size', size);
+    } catch {}
+  };
+
   const script = detectScript(story.heading);
   const isRTL = script.isRTL;
 
@@ -120,6 +154,14 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
 
   return (
     <div className="max-w-5xl xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Sticky Top Reading Progress Bar */}
+      <div className="fixed top-0 left-0 right-0 h-1 z-50 pointer-events-none bg-black/5">
+        <div
+          className="h-full bg-gradient-to-r from-[#903E97] via-[#B24CB9] to-[#792F80] transition-all duration-150 ease-out"
+          style={{ width: `${readingProgress}%` }}
+        />
+      </div>
+
       {/* Top Breadcrumb & Navigation */}
       <div className="flex items-center justify-between gap-4 mb-6">
         <button
@@ -228,6 +270,58 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Accessibility Font Size Adjuster (Malayalam Conjunct Clarity) */}
+            <div className="inline-flex items-center rounded-lg border border-[#E2E4E8] bg-white p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => handleSetFontSize('small')}
+                className={`px-2 py-0.5 rounded font-bold text-[10px] transition-colors cursor-pointer ${
+                  fontSize === 'small'
+                    ? 'bg-[#903E97] text-white shadow-xs'
+                    : 'text-[#58606E] hover:text-[#903E97]'
+                }`}
+                title="ചെറിയ അക്ഷരങ്ങൾ (Small Font - 14px)"
+              >
+                A-
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetFontSize('normal')}
+                className={`px-2 py-0.5 rounded font-bold text-xs transition-colors cursor-pointer ${
+                  fontSize === 'normal'
+                    ? 'bg-[#903E97] text-white shadow-xs'
+                    : 'text-[#58606E] hover:text-[#903E97]'
+                }`}
+                title="സാധാരണ അക്ഷരങ്ങൾ (Normal Font - 16px)"
+              >
+                A
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetFontSize('large')}
+                className={`px-2 py-0.5 rounded font-bold text-xs transition-colors cursor-pointer ${
+                  fontSize === 'large'
+                    ? 'bg-[#903E97] text-white shadow-xs'
+                    : 'text-[#58606E] hover:text-[#903E97]'
+                }`}
+                title="വലിയ അക്ഷരങ്ങൾ (Large Font - 18px)"
+              >
+                A+
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetFontSize('xlarge')}
+                className={`px-2 py-0.5 rounded font-bold text-xs transition-colors cursor-pointer ${
+                  fontSize === 'xlarge'
+                    ? 'bg-[#903E97] text-white shadow-xs'
+                    : 'text-[#58606E] hover:text-[#903E97]'
+                }`}
+                title="കൂടുതൽ വലിയ അക്ഷരങ്ങൾ (Extra Large Font - 20px)"
+              >
+                A++
+              </button>
+            </div>
+
             <button
               onClick={handleShare}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#E2E4E8] hover:border-[#6A1B9A] text-[#1E2229] text-xs font-semibold transition-colors"
@@ -289,7 +383,15 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
         <div className="relative mb-10">
           {/* Preview Story Content (First 2 paragraphs) */}
           <div
-            className="prose prose-slate max-w-none text-[#1E2229] leading-relaxed multilingual-lead [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-[#1E2229] [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-[#1E2229] [&_h3]:mt-6 [&_h3]:mb-2 [&_p]:mb-4 [&_p]:text-base [&_p]:text-[#1E2229] [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_blockquote]:border-l-4 [&_blockquote]:border-[#6A1B9A] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[#58606E]"
+            className={`prose prose-slate max-w-none text-[#1E2229] leading-relaxed multilingual-lead [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-[#1E2229] [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-[#1E2229] [&_h3]:mt-6 [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_blockquote]:border-l-4 [&_blockquote]:border-[#6A1B9A] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[#58606E] ${
+              fontSize === 'small'
+                ? '[&_p]:text-sm [&_p]:leading-relaxed text-sm'
+                : fontSize === 'large'
+                ? '[&_p]:text-lg [&_p]:leading-loose text-lg'
+                : fontSize === 'xlarge'
+                ? '[&_p]:text-xl [&_p]:leading-loose text-xl'
+                : '[&_p]:text-base [&_p]:leading-relaxed text-base'
+            }`}
             dir={isRTL ? 'rtl' : 'ltr'}
             dangerouslySetInnerHTML={{ __html: getPreviewStoryContent(story.full_story) }}
           />
@@ -350,7 +452,15 @@ export const ArticleDetail: React.FC<ArticleDetailProps> = ({
             </div>
           )}
           <article
-            className="prose prose-slate max-w-none mb-10 text-[#1E2229] leading-relaxed multilingual-lead [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-[#1E2229] [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-[#1E2229] [&_h3]:mt-6 [&_h3]:mb-2 [&_p]:mb-4 [&_p]:text-base [&_p]:text-[#1E2229] [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_blockquote]:border-l-4 [&_blockquote]:border-[#6A1B9A] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[#58606E] [&_a]:text-[#6A1B9A] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#7B1FA2]"
+            className={`prose prose-slate max-w-none mb-10 text-[#1E2229] leading-relaxed multilingual-lead [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:text-[#1E2229] [&_h2]:mt-8 [&_h2]:mb-3 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-[#1E2229] [&_h3]:mt-6 [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_blockquote]:border-l-4 [&_blockquote]:border-[#6A1B9A] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[#58606E] [&_a]:text-[#6A1B9A] [&_a]:font-semibold [&_a]:underline hover:[&_a]:text-[#7B1FA2] ${
+              fontSize === 'small'
+                ? '[&_p]:text-sm [&_p]:leading-relaxed text-sm'
+                : fontSize === 'large'
+                ? '[&_p]:text-lg [&_p]:leading-loose text-lg'
+                : fontSize === 'xlarge'
+                ? '[&_p]:text-xl [&_p]:leading-loose text-xl'
+                : '[&_p]:text-base [&_p]:leading-relaxed text-base'
+            }`}
             dir={isRTL ? 'rtl' : 'ltr'}
             dangerouslySetInnerHTML={{ __html: story.full_story || '<p>Story content pending editorial review.</p>' }}
           />
