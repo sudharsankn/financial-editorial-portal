@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, Globe, ExternalLink } from 'lucide-react';
+import { X, Globe, ExternalLink, User, LogIn } from 'lucide-react';
 import { Section } from '../types/story';
+import { UserAccount } from '../lib/auth';
 
 interface HedgeDrawerProps {
   isOpen: boolean;
@@ -10,6 +11,9 @@ interface HedgeDrawerProps {
   onOpenSubscribe: () => void;
   onOpenBookmarks: () => void;
   onOpenAdmin: () => void;
+  currentUser?: UserAccount | null;
+  onOpenSignIn: () => void;
+  onOpenMyAccount: () => void;
 }
 
 const SECTIONS_LIST = [
@@ -28,6 +32,9 @@ export const HedgeDrawer: React.FC<HedgeDrawerProps> = ({
   onOpenSubscribe,
   onOpenBookmarks,
   onOpenAdmin,
+  currentUser = null,
+  onOpenSignIn,
+  onOpenMyAccount,
 }) => {
   if (!isOpen) return null;
 
@@ -91,6 +98,35 @@ export const HedgeDrawer: React.FC<HedgeDrawerProps> = ({
             <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest px-3 mb-2">
               Reader Options
             </p>
+
+            {currentUser ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenMyAccount();
+                  onClose();
+                }}
+                className="w-full text-left px-3 py-2 text-xs font-bold text-white hover:bg-white/15 rounded transition-colors flex items-center gap-2"
+              >
+                <div className="w-5 h-5 rounded-full bg-white text-[#903E97] flex items-center justify-center text-[10px] font-black uppercase">
+                  {(currentUser.name || 'U').charAt(0)}
+                </div>
+                <span>MY ACCOUNT ({currentUser.name})</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenSignIn();
+                  onClose();
+                }}
+                className="w-full text-left px-3 py-2 text-xs font-semibold text-white/85 hover:text-white hover:bg-white/10 rounded transition-colors flex items-center gap-2"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>SIGN IN TO JOURNAL</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => {

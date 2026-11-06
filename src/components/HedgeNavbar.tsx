@@ -9,7 +9,9 @@ import {
   ChevronRight,
   Filter,
   Check,
+  User,
 } from 'lucide-react';
+import { UserAccount } from '../lib/auth';
 
 interface HedgeNavbarProps {
   onNavigateHome: () => void;
@@ -22,6 +24,9 @@ interface HedgeNavbarProps {
   onOpenBookmarks: () => void;
   onOpenSubscribe: () => void;
   isBookmarksActive?: boolean;
+  currentUser?: UserAccount | null;
+  onOpenSignIn: () => void;
+  onOpenMyAccount: () => void;
 }
 
 export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
@@ -35,6 +40,9 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
   onOpenBookmarks,
   onOpenSubscribe,
   isBookmarksActive = false,
+  currentUser = null,
+  onOpenSignIn,
+  onOpenMyAccount,
 }) => {
   const [showSearch, setShowSearch] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
@@ -49,8 +57,18 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
     <>
       <header id="section-header-navbar" className="sticky top-0 z-40 bg-white border-b border-[#E6E6E6] shadow-xs">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-14 h-[60px] flex items-center justify-between">
-          {/* Left: Hedge Ohari Brand Logo */}
-          <div className="flex items-center">
+          {/* Left: Drawer Hamburger & Brand Logo */}
+          <div className="flex items-center gap-3">
+            {onOpenSidebar && (
+              <button
+                type="button"
+                onClick={onOpenSidebar}
+                className="p-1.5 text-[#262B2E] hover:text-[#903E97] transition-colors rounded-lg hover:bg-black/5 cursor-pointer"
+                title="Navigation Menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            )}
             <button
               id="btn-navbar-logo"
               type="button"
@@ -77,14 +95,41 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
             </button>
           </div>
 
-          {/* Right: Subscribe, Bookmark Count, Search, Sign In / Admin */}
-          <div className="flex items-center justify-end gap-2 sm:gap-4 text-xs font-semibold">
+          {/* Right: Subscribe, Bookmark Count, Search, Sign In / My Account, Admin */}
+          <div className="flex items-center justify-end gap-2 sm:gap-3 text-xs font-semibold">
+            {/* User Account / Sign In */}
+            {currentUser ? (
+              <button
+                id="btn-navbar-account"
+                type="button"
+                onClick={onOpenMyAccount}
+                className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-[#FAF7FC] border border-[#EADDF0] text-[#903E97] hover:bg-[#F2E8F7] transition-all cursor-pointer font-bold text-xs"
+                title="എന്റെ അക്കൗണ്ട് (My Account)"
+              >
+                <div className="w-5 h-5 rounded-full bg-[#903E97] text-white flex items-center justify-center text-[10px] font-black uppercase">
+                  {(currentUser.name || 'U').charAt(0)}
+                </div>
+                <span className="hidden sm:inline max-w-[100px] truncate text-xs font-semibold text-[#262B2E]">
+                  {currentUser.name}
+                </span>
+              </button>
+            ) : (
+              <button
+                id="btn-navbar-signin"
+                type="button"
+                onClick={onOpenSignIn}
+                className="px-2.5 sm:px-3 py-1.5 text-[11px] font-bold text-[#262B2E] hover:text-[#903E97] transition-colors uppercase tracking-wider cursor-pointer"
+              >
+                SIGN IN
+              </button>
+            )}
+
             {/* Subscribe Button */}
             <button
               id="btn-navbar-subscribe"
               type="button"
               onClick={onOpenSubscribe}
-              className="hidden sm:inline-flex items-center justify-center px-4 py-2 rounded text-[11px] font-bold uppercase tracking-wider bg-[#903E97] hover:bg-[#A045A8] text-white transition-all shadow-xs cursor-pointer"
+              className="hidden sm:inline-flex items-center justify-center px-3.5 py-1.5 rounded text-[11px] font-bold uppercase tracking-wider bg-[#903E97] hover:bg-[#A045A8] text-white transition-all shadow-xs cursor-pointer"
             >
               SUBSCRIBE
             </button>
@@ -110,7 +155,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
               id="btn-navbar-search"
               type="button"
               onClick={() => setShowSearch(!showSearch)}
-              className="p-1.5 text-[#262B2E] hover:text-[#903E97] transition-colors"
+              className="p-1.5 text-[#262B2E] hover:text-[#903E97] transition-colors cursor-pointer"
               title="Search"
             >
               <Search className="w-4 h-4" />
@@ -121,7 +166,7 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
               id="btn-navbar-admin"
               type="button"
               onClick={onOpenAdmin}
-              className="px-2.5 py-1 text-[11px] font-bold text-[#903E97] border border-[#903E97]/40 hover:bg-[#FAF7FC] rounded transition-colors uppercase tracking-wider"
+              className="px-2 py-1 text-[11px] font-bold text-[#903E97] border border-[#903E97]/40 hover:bg-[#FAF7FC] rounded transition-colors uppercase tracking-wider cursor-pointer"
             >
               ADMIN
             </button>

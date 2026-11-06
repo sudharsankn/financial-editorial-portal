@@ -22,11 +22,14 @@ import {
   FileText,
   BadgePercent,
   Download,
+  User,
 } from 'lucide-react';
+import { saveCurrentUser } from '../lib/auth';
 
 interface SubscriptionPageProps {
   onBackHome: () => void;
   onSelectStory?: (canonicalUrl: string) => void;
+  onOpenMyAccount?: () => void;
 }
 
 interface PlanOption {
@@ -127,6 +130,7 @@ const FAQS = [
 export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
   onBackHome,
   onSelectStory,
+  onOpenMyAccount,
 }) => {
   const [selectedPlanId, setSelectedPlanId] = useState<'annual' | 'two-year' | 'starter'>('two-year');
   const [fullName, setFullName] = useState('');
@@ -176,6 +180,26 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
     try {
       localStorage.setItem('hedge_is_subscribed', 'true');
       localStorage.setItem('hedge_subscription_record', JSON.stringify(subData));
+
+      // Automatically create or update user profile
+      saveCurrentUser({
+        id: `usr_${Date.now()}`,
+        name: fullName || 'Hedge Subscriber',
+        email: emailAddress || 'subscriber@hedgeohari.com',
+        mobile: mobileNumber || '',
+        profession: 'Investor / Financial Planner',
+        subscription: {
+          subId,
+          planTitle: selectedPlan.titleMalayalam,
+          planDuration: selectedPlan.durationLabel,
+          amountPaid: finalPayable,
+          startDate: subData.createdAt,
+          expiryDate: subData.expiryDate,
+          paymentId: subData.paymentId,
+          status: 'active',
+          daysRemaining: selectedPlan.durationMonths * 30,
+        },
+      });
     } catch {}
 
     setSubscriptionDetails(subData);
@@ -402,16 +426,27 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
                 id="btn-sub-start-reading"
                 type="button"
                 onClick={onBackHome}
-                className="w-full sm:w-auto px-8 py-3 rounded-xl bg-[#903E97] hover:bg-[#A045A8] text-white text-sm font-bold shadow-md hover:shadow-lg transition-all"
+                className="w-full sm:w-auto px-8 py-3 rounded-xl bg-[#903E97] hover:bg-[#A045A8] text-white text-sm font-bold shadow-md hover:shadow-lg transition-all cursor-pointer"
               >
                 ഇന്നത്തെ വാർത്തകൾ വായിക്കുക (Start Reading)
               </button>
+
+              {onOpenMyAccount && (
+                <button
+                  type="button"
+                  onClick={onOpenMyAccount}
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl border border-[#903E97] bg-white hover:bg-[#FAF7FC] text-[#903E97] text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <User className="w-4 h-4" />
+                  <span>എന്റെ അക്കൗണ്ട് (My Account)</span>
+                </button>
+              )}
 
               <button
                 id="btn-sub-download-invoice"
                 type="button"
                 onClick={() => window.print()}
-                className="w-full sm:w-auto px-6 py-3 rounded-xl border border-[#E6E6E6] bg-white hover:bg-[#F6F5F8] text-[#262B2E] text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-6 py-3 rounded-xl border border-[#E6E6E6] bg-white hover:bg-[#F6F5F8] text-[#262B2E] text-sm font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Download className="w-4 h-4 text-[#676A6C]" />
                 <span>രസീത് ഡൗൺലോഡ് ചെയ്യുക (Invoice)</span>

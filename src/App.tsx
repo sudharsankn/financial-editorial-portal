@@ -25,12 +25,16 @@ import { AdminPanel } from './components/AdminPanel';
 import { SupabaseGuideModal } from './components/SupabaseGuideModal';
 import { NextJsExportModal } from './components/NextJsExportModal';
 import { SubscriptionPage } from './components/SubscriptionPage';
+import { SignInModal } from './components/SignInModal';
+import { MyAccountPage } from './components/MyAccountPage';
+import { getCurrentUser, logoutUser, UserAccount } from './lib/auth';
 
 export default function App() {
   // Navigation & View state
-  const [currentView, setCurrentView] = useState<'feed' | 'admin' | 'article' | 'subscribe'>(() => {
+  const [currentView, setCurrentView] = useState<'feed' | 'admin' | 'article' | 'subscribe' | 'my-account'>(() => {
     const path = window.location.pathname.replace(/^\//, '');
     if (path === 'subscribe') return 'subscribe';
+    if (path === 'my-account') return 'my-account';
     if (path === 'admin') return 'admin';
     if (path) return 'article';
     return 'feed';
@@ -38,6 +42,10 @@ export default function App() {
   const [currentCanonicalUrl, setCurrentCanonicalUrl] = useState<string | null>(null);
   const [adminTab, setAdminTab] = useState<'stories' | 'markets' | 'stocks'>('stories');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // User Auth State
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
+  const [signInModalOpen, setSignInModalOpen] = useState(false);
 
   // Filter & Search state
   const [selectedSection, setSelectedSection] = useState<string>('All');
@@ -227,8 +235,8 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Navigate back to feed, admin, or subscribe
-  const handleNavigate = (view: 'feed' | 'admin' | 'subscribe') => {
+  // Navigate back to feed, admin, subscribe, or my-account
+  const handleNavigate = (view: 'feed' | 'admin' | 'subscribe' | 'my-account') => {
     if (view === 'feed') {
       setCurrentView('feed');
       setCurrentCanonicalUrl(null);
@@ -241,8 +249,27 @@ export default function App() {
       setCurrentView('subscribe');
       setCurrentCanonicalUrl(null);
       window.history.pushState(null, '', '/subscribe');
+    } else if (view === 'my-account') {
+      setCurrentView('my-account');
+      setCurrentCanonicalUrl(null);
+      window.history.pushState(null, '', '/my-account');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleLoginSuccess = (user: UserAccount) => {
+    setCurrentUser(user);
+    setSignInModalOpen(false);
+  };
+
+  const handleLogout = () => {
+    logoutUser();
+    setCurrentUser(null);
+    handleNavigate('feed');
+  };
+
+  const handleUpdateUser = (updated: UserAccount) => {
+    setCurrentUser(updated);
   };
 
   // Admin: Save story
@@ -304,6 +331,9 @@ export default function App() {
         onOpenSubscribe={() => {
           handleNavigate('subscribe');
         }}
+        currentUser={currentUser}
+        onOpenSignIn={() => setSignInModalOpen(true)}
+        onOpenMyAccount={() => handleNavigate('my-account')}
       />
 
       {/* 2. Top Live Scrolling Market Index, Movers & Upcoming IPO Ticker */}
@@ -347,6 +377,15 @@ export default function App() {
           if (currentView !== 'feed') handleNavigate('feed');
         }}
         onOpenAdmin={() => handleNavigate('admin')}
+        currentUser={currentUser}
+        onOpenSignIn={() => {
+          setSidebarOpen(false);
+          setSignInModalOpen(true);
+        }}
+        onOpenMyAccount={() => {
+          setSidebarOpen(false);
+          handleNavigate('my-account');
+        }}
       />
 
       {/* 4. Main Views */}
@@ -443,12 +482,64 @@ export default function App() {
           <SubscriptionPage
             onBackHome={() => handleNavigate('feed')}
             onSelectStory={handleSelectStory}
+            onOpenMyAccount={() => handleNavigate('my-account')}
           />
+        )}
+
+        {/* VIEW E: SUBSCRIBER MY ACCOUNT DASHBOARD */}
+        {currentView === 'my-account' && (
+          currentUser ? (
+            <MyAccountPage
+              user={currentUser}
+              onUpdateUser={handleUpdateUser}
+              onLogout={handleLogout}
+              onNavigateHome={() => handleNavigate('feed')}
+              onNavigateSubscribe={() => handleNavigate('subscribe')}
+              onNavigateBookmarks={() => {
+                setShowOnlyBookmarks(true);
+                handleNavigate('feed');
+              }}
+            />
+          ) : (
+            <div className="max-w-md mx-auto text-center py-20 px-4 space-y-4">
+              <div className="w-16 h-16 rounded-full bg-[#903E97]/10 text-[#903E97] flex items-center justify-center mx-auto text-2xl font-bold">
+                🔒
+              </div>
+              <h2 className="text-xl font-bold text-[#262B2E]">ലോഗിൻ ആവശ്യമാണ് (Sign In Required)</h2>
+              <p className="text-xs text-[#676A6C] max-w-sm mx-auto">
+                നിങ്ങളുടെ സബ്സ്ക്രിപ്ഷനും പ്രൊഫൈൽ വിവരങ്ങളും പരിശോധിക്കാൻ ദയവായി അക്കൗണ്ടിലേക്ക് ലോഗിൻ ചെയ്യുക.
+              </p>
+              <div className="pt-2 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSignInModalOpen(true)}
+                  className="px-6 py-2.5 rounded-xl bg-[#903E97] text-white text-xs font-bold shadow-md hover:bg-[#792f80] transition-colors cursor-pointer"
+                >
+                  ലോഗിൻ ചെയ്യുക (Sign In)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleNavigate('feed')}
+                  className="px-5 py-2.5 rounded-xl border border-[#E6E6E6] text-[#262B2E] text-xs font-semibold hover:bg-white transition-colors cursor-pointer"
+                >
+                  ഹോം പേജിലേക്ക് (Home)
+                </button>
+              </div>
+            </div>
+          )
         )}
       </main>
 
       {/* 4. Hedge Ohari Minimalist Brand Footer */}
       {currentView !== 'admin' && <HedgeFooter />}
+
+      {/* Sign In Modal */}
+      <SignInModal
+        isOpen={signInModalOpen}
+        onClose={() => setSignInModalOpen(false)}
+        onSuccess={handleLoginSuccess}
+        onNavigateSubscribe={() => handleNavigate('subscribe')}
+      />
 
       {/* Modals for Supabase & Next.js export */}
       <SupabaseGuideModal
