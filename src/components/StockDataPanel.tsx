@@ -198,7 +198,7 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
               </span>
             </div>
             <p className="text-xs text-[#58606E]">
-              Captures live market data in a single click: Review all real-time news with full images &amp; content, then manually save to <code className="text-xs font-mono">public.news</code> for story drafting.
+              Choose <strong>Fetch Data on Click</strong> to fetch and manually publish in Stories Manager, or <strong>Fetch &amp; Publish Stories</strong> to fetch and auto publish.
             </p>
           </div>
 
@@ -220,49 +220,60 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
         </div>
 
         {/* 1-Click Action Bar */}
-        <div className="pt-4 flex flex-wrap items-center justify-end gap-3">
+        <div className="pt-4 flex flex-wrap items-center justify-end gap-4">
           {/* Button 1: Fetch Data on Click */}
-          <button
-            id="btn-fetch-unified-data"
-            type="button"
-            onClick={handleSingleClickFetch}
-            disabled={syncing || autoPublishing}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white text-xs font-bold transition-all shadow-sm hover:shadow disabled:opacity-50 cursor-pointer"
-          >
-            {syncing ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Fetching All Market Data...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                <span>Fetch Data on Click</span>
-              </>
-            )}
-          </button>
+          <div className="flex flex-col items-end">
+            <button
+              id="btn-fetch-unified-data"
+              type="button"
+              onClick={handleSingleClickFetch}
+              disabled={syncing || autoPublishing}
+              title="Fetch and manually publish in Stories Manager"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded bg-[#6A1B9A] hover:bg-[#7B1FA2] text-white text-xs font-bold transition-all shadow-sm hover:shadow disabled:opacity-50 cursor-pointer"
+            >
+              {syncing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Fetching Data...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Fetch Data on Click</span>
+                </>
+              )}
+            </button>
+            <span className="text-[10px] text-[#58606E] mt-1 font-medium">
+              Fetch and manually publish in Stories Manager
+            </span>
+          </div>
 
-          {/* Button 2: NEW - Fetch & Publish Stories (Auto-Publish without duplicates) */}
-          <button
-            id="btn-fetch-and-publish-stories"
-            type="button"
-            onClick={handleFetchAndAutoPublish}
-            disabled={syncing || autoPublishing}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded bg-[#0E8A54] hover:bg-[#0B6E43] text-white text-xs font-bold transition-all shadow-sm hover:shadow disabled:opacity-50 cursor-pointer"
-            title="Automatically fetch live financial wire stories and publish them directly without any duplicates"
-          >
-            {autoPublishing ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Publishing Stories...</span>
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4" />
-                <span>Fetch &amp; Publish Stories</span>
-              </>
-            )}
-          </button>
+          {/* Button 2: Fetch & Publish Stories (Auto-Publish without duplicates) */}
+          <div className="flex flex-col items-end">
+            <button
+              id="btn-fetch-and-publish-stories"
+              type="button"
+              onClick={handleFetchAndAutoPublish}
+              disabled={syncing || autoPublishing}
+              title="Fetch and auto publish"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded bg-[#0E8A54] hover:bg-[#0B6E43] text-white text-xs font-bold transition-all shadow-sm hover:shadow disabled:opacity-50 cursor-pointer"
+            >
+              {autoPublishing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Auto-Publishing...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>Fetch &amp; Publish Stories</span>
+                </>
+              )}
+            </button>
+            <span className="text-[10px] text-[#0E8A54] mt-1 font-semibold">
+              Fetch and auto publish (zero duplicates)
+            </span>
+          </div>
         </div>
       </div>
 
