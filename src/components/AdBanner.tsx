@@ -28,8 +28,11 @@ export const AdBanner: React.FC<AdBannerProps> = ({
   if (!activeAd) return null;
 
   const handleClick = () => {
-    if (activeAd.campaign_id) {
-      recordAdClick(activeAd.campaign_id);
+    if (activeAd?.campaign_id) {
+      recordAdClick(activeAd.campaign_id, activeAd.id, {
+        pageUrl: typeof window !== 'undefined' ? window.location.href : '',
+        referrer: typeof document !== 'undefined' ? document.referrer : '',
+      });
     }
   };
 

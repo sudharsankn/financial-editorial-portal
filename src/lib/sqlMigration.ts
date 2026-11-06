@@ -341,6 +341,34 @@ VALUES
   ('OH00076', 'ICICI Prudential', 'SIP', 'Sidebar - Left', 'Display', true, '/ads/icici-sip.jpg', 'https://www.iciciprumf.com', '2025-07-08', '2027-08-08', 0, 31, 0)
 ON CONFLICT (campaign_id) DO NOTHING;
 
+-- 11. Advertisement Clicks & Timestamp Logs Table
+CREATE TABLE IF NOT EXISTS public.ad_clicks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  advertisement_id TEXT,
+  campaign_id TEXT NOT NULL,
+  page_url TEXT,
+  referrer TEXT,
+  user_agent TEXT,
+  clicked_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_ad_clicks_campaign ON public.ad_clicks (campaign_id);
+CREATE INDEX IF NOT EXISTS idx_ad_clicks_ad_id ON public.ad_clicks (advertisement_id);
+CREATE INDEX IF NOT EXISTS idx_ad_clicks_time ON public.ad_clicks (clicked_at DESC);
+
+ALTER TABLE public.ad_clicks ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can record ad clicks" ON public.ad_clicks;
+CREATE POLICY "Public can record ad clicks"
+  ON public.ad_clicks FOR INSERT
+  WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public can view ad clicks" ON public.ad_clicks;
+CREATE POLICY "Public can view ad clicks"
+  ON public.ad_clicks FOR SELECT
+  USING (true);
+
 
 `;
 

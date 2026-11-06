@@ -1,4 +1,4 @@
-import { AdCampaign, AdPosition } from '../types/ad';
+import { AdCampaign, AdPosition, AdClickRecord } from '../types/ad';
 import { getSupabaseClient } from './supabase';
 
 export const DEFAULT_AD_CAMPAIGNS: AdCampaign[] = [
@@ -17,8 +17,8 @@ export const DEFAULT_AD_CAMPAIGNS: AdCampaign[] = [
     cost_per_day: 0,
     number_of_days: 31,
     total_cost: 0,
-    impressions_count: 1420,
-    clicks_count: 86,
+    impressions_count: 0,
+    clicks_count: 0,
   },
   {
     id: 'ad_oh00073',
@@ -35,8 +35,8 @@ export const DEFAULT_AD_CAMPAIGNS: AdCampaign[] = [
     number_of_days: 31,
     total_cost: 0,
     is_active: true,
-    impressions_count: 2890,
-    clicks_count: 142,
+    impressions_count: 0,
+    clicks_count: 0,
   },
   {
     id: 'ad_oh00075',
@@ -53,8 +53,8 @@ export const DEFAULT_AD_CAMPAIGNS: AdCampaign[] = [
     number_of_days: 31,
     total_cost: 0,
     is_active: true,
-    impressions_count: 3100,
-    clicks_count: 198,
+    impressions_count: 0,
+    clicks_count: 0,
   },
   {
     id: 'ad_oh00076',
@@ -71,8 +71,8 @@ export const DEFAULT_AD_CAMPAIGNS: AdCampaign[] = [
     number_of_days: 31,
     total_cost: 0,
     is_active: true,
-    impressions_count: 2450,
-    clicks_count: 110,
+    impressions_count: 0,
+    clicks_count: 0,
   },
 ];
 
@@ -220,12 +220,66 @@ export async function restoreCampaign(id: string): Promise<boolean> {
 }
 
 /**
- * Increment click count safely in Supabase.
+ * Increment click count safely in Supabase & local persistence,
+ * and capture the click event with its exact timestamp in the new table `public.ad_clicks`.
  */
-export async function recordAdClick(campaignId: string): Promise<void> {
+export async function recordAdClick(
+  campaignId: string,
+  advertisementId?: string,
+  extraMetadata?: { pageUrl?: string; referrer?: string }
+): Promise<void> {
+  const timestamp = new Date().toISOString();
+  const pageUrl =
+    extraMetadata?.pageUrl || (typeof window !== 'undefined' ? window.location.href : '');
+  const referrer =
+    extraMetadata?.referrer || (typeof document !== 'undefined' ? document.referrer : '');
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+
+  // 1. Update local storage for immediate reactivity
+  try {
+    const local = localStorage.getItem('hedge_ad_campaigns');
+    if (local) {
+      const ads: AdCampaign[] = JSON.parse(local);
+      const updated = ads.map((a) =>
+        a.campaign_id === campaignId || (advertisementId && a.id === advertisementId)
+          ? { ...a, clicks_count: (a.clicks_count || 0) + 1 }
+          : a
+      );
+      localStorage.setItem('hedge_ad_campaigns', JSON.stringify(updated));
+    }
+
+    // Persist click event locally for offline inspection
+    const clickLogs: AdClickRecord[] = JSON.parse(
+      localStorage.getItem('hedge_ad_click_logs') || '[]'
+    );
+    clickLogs.unshift({
+      campaign_id: campaignId,
+      advertisement_id: advertisementId || null,
+      clicked_at: timestamp,
+      page_url: pageUrl,
+      referrer,
+      user_agent: userAgent,
+    });
+    localStorage.setItem('hedge_ad_click_logs', JSON.stringify(clickLogs.slice(0, 500)));
+  } catch {}
+
+  // 2. Persist to Supabase: new table `ad_clicks` with mapped advertisement_id & timestamp
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
+      // Insert individual click timestamp entry
+      await supabase.from('ad_clicks').insert([
+        {
+          advertisement_id: advertisementId || null,
+          campaign_id: campaignId,
+          clicked_at: timestamp,
+          page_url: pageUrl,
+          referrer: referrer || null,
+          user_agent: userAgent || null,
+        },
+      ]);
+
+      // Increment aggregate counter on advertisements table
       const { data } = await supabase
         .from('advertisements')
         .select('clicks_count')
@@ -237,18 +291,72 @@ export async function recordAdClick(campaignId: string): Promise<void> {
           .from('advertisements')
           .update({
             clicks_count: (data.clicks_count || 0) + 1,
-            updated_at: new Date().toISOString(),
+            updated_at: timestamp,
           })
           .eq('campaign_id', campaignId);
       }
-    } catch {}
+    } catch (err) {
+      console.warn('Record ad click notice in ad_clicks table:', err);
+    }
   }
 }
 
 /**
- * Increment impression count safely in Supabase.
+ * Fetch click timestamp logs for a specific campaign or all campaigns.
+ */
+export async function fetchAdClickLogs(campaignId?: string): Promise<AdClickRecord[]> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      let query = supabase
+        .from('ad_clicks')
+        .select('*')
+        .order('clicked_at', { ascending: false })
+        .limit(100);
+
+      if (campaignId) {
+        query = query.eq('campaign_id', campaignId);
+      }
+
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) {
+        return data as AdClickRecord[];
+      }
+    } catch (err) {
+      console.warn('Fetch ad clicks notice:', err);
+    }
+  }
+
+  // Fallback to local logs
+  try {
+    const local = localStorage.getItem('hedge_ad_click_logs');
+    if (local) {
+      const logs: AdClickRecord[] = JSON.parse(local);
+      return campaignId ? logs.filter((l) => l.campaign_id === campaignId) : logs;
+    }
+  } catch {}
+
+  return [];
+}
+
+/**
+ * Increment impression count safely in Supabase & local persistence.
  */
 export async function recordAdImpression(campaignId: string): Promise<void> {
+  // Update local storage
+  try {
+    const local = localStorage.getItem('hedge_ad_campaigns');
+    if (local) {
+      const ads: AdCampaign[] = JSON.parse(local);
+      const updated = ads.map((a) =>
+        a.campaign_id === campaignId
+          ? { ...a, impressions_count: (a.impressions_count || 0) + 1 }
+          : a
+      );
+      localStorage.setItem('hedge_ad_campaigns', JSON.stringify(updated));
+    }
+  } catch {}
+
   const supabase = getSupabaseClient();
   if (supabase) {
     try {

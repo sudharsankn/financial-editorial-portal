@@ -30,3 +30,13 @@ export interface AdCampaign {
   updated_at?: string;
 }
 
+export interface AdClickRecord {
+  id?: string;
+  advertisement_id?: string | null;
+  campaign_id: string;
+  clicked_at: string;
+  page_url?: string | null;
+  referrer?: string | null;
+  user_agent?: string | null;
+}
+

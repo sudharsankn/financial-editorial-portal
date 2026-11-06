@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { AdCampaign, AdPosition, AdType } from '../types/ad';
+import { AdCampaign, AdPosition, AdType, AdClickRecord } from '../types/ad';
 import {
   fetchActiveAds,
   fetchAllAdminAds,
+  fetchAdClickLogs,
   DEFAULT_AD_CAMPAIGNS,
   uploadAdImageToSupabase,
   softDeleteCampaign,
@@ -36,13 +37,33 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  MousePointerClick,
 } from 'lucide-react';
 
 export const AdminAdsManager: React.FC = () => {
   const [campaigns, setCampaigns] = useState<AdCampaign[]>(() => {
     try {
       const local = localStorage.getItem('hedge_ad_campaigns');
-      return local ? JSON.parse(local) : DEFAULT_AD_CAMPAIGNS;
+      if (local) {
+        const parsed: AdCampaign[] = JSON.parse(local);
+        // Clear out legacy mock dummy numbers if present so fresh zero counts start
+        return parsed.map((c) => {
+          if (c.impressions_count === 1420 && c.clicks_count === 86) {
+            return { ...c, impressions_count: 0, clicks_count: 0 };
+          }
+          if (c.impressions_count === 2890 && c.clicks_count === 142) {
+            return { ...c, impressions_count: 0, clicks_count: 0 };
+          }
+          if (c.impressions_count === 3100 && c.clicks_count === 198) {
+            return { ...c, impressions_count: 0, clicks_count: 0 };
+          }
+          if (c.impressions_count === 2450 && c.clicks_count === 110) {
+            return { ...c, impressions_count: 0, clicks_count: 0 };
+          }
+          return c;
+        });
+      }
+      return DEFAULT_AD_CAMPAIGNS;
     } catch {
       return DEFAULT_AD_CAMPAIGNS;
     }
@@ -63,6 +84,26 @@ export const AdminAdsManager: React.FC = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadSuccessNotice, setUploadSuccessNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Click Logs Modal State (Supabase ad_clicks tracking)
+  const [clickLogsModalOpen, setClickLogsModalOpen] = useState(false);
+  const [selectedAdForLogs, setSelectedAdForLogs] = useState<AdCampaign | null>(null);
+  const [clickLogs, setClickLogs] = useState<AdClickRecord[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  const handleOpenClickLogs = async (ad: AdCampaign) => {
+    setSelectedAdForLogs(ad);
+    setClickLogsModalOpen(true);
+    setLoadingLogs(true);
+    try {
+      const logs = await fetchAdClickLogs(ad.campaign_id);
+      setClickLogs(logs);
+    } catch {
+      setClickLogs([]);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
 
   // Helper to check if campaign end date has crossed (Frontend only check)
   const isCampaignExpired = (endDateStr: string): boolean => {
@@ -788,13 +829,21 @@ export const AdminAdsManager: React.FC = () => {
                         <div className="font-semibold text-[#1E2229]">
                           {ad.impressions_count || 0} views
                         </div>
-                        <div className="text-[10px] text-[#0E8A54] font-bold">
-                          {ad.clicks_count || 0} clicks (
-                          {(ad.impressions_count && ad.clicks_count
-                            ? ((ad.clicks_count / ad.impressions_count) * 100).toFixed(1)
-                            : 0)}
-                          % CTR)
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenClickLogs(ad)}
+                          className="text-[10px] text-[#0E8A54] hover:text-[#0a663e] font-bold flex items-center gap-1 hover:underline cursor-pointer text-left"
+                          title="View Supabase timestamped click logs for this campaign"
+                        >
+                          <span>
+                            {ad.clicks_count || 0} clicks (
+                            {(ad.impressions_count && ad.clicks_count
+                              ? ((ad.clicks_count / ad.impressions_count) * 100).toFixed(1)
+                              : 0)}
+                            % CTR)
+                          </span>
+                          <ExternalLink className="w-2.5 h-2.5 opacity-60 shrink-0" />
+                        </button>
                       </td>
 
                       {/* Status Column: Expired (Frontend check), Deleted, Paused, or Active */}
@@ -1466,6 +1515,115 @@ export const AdminAdsManager: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* CLICK LOGS & TIMESTAMPS MODAL */}
+      {clickLogsModalOpen && selectedAdForLogs && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-[#E6E6E6] overflow-hidden flex flex-col max-h-[85vh]">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E6E6E6] bg-[#FAF7FC]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#0E8A54]/10 text-[#0E8A54] flex items-center justify-center">
+                  <MousePointerClick className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[#1E2229]">
+                    ക്ലിക്ക് ടൈംസ്റ്റാമ്പ് ലോഗുകൾ (Click Logs &amp; Timestamps)
+                  </h3>
+                  <p className="text-[11px] text-[#58606E]">
+                    Campaign: <strong className="text-[#903E97] font-mono">{selectedAdForLogs.campaign_id}</strong> • {selectedAdForLogs.advertiser} ({selectedAdForLogs.brand})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setClickLogsModalOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-white text-[#8A92A0] hover:text-[#1E2229] flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Meta Banner */}
+            <div className="px-6 py-2.5 bg-[#FAF7FC] border-b border-[#E2E4E8] flex items-center justify-between text-xs">
+              <span className="text-[#58606E]">
+                Mapped Advertisement ID: <code className="bg-white px-2 py-0.5 rounded border border-[#E2E4E8] text-[#1E2229] font-mono text-[10px]">{selectedAdForLogs.id}</code>
+              </span>
+              <span className="font-bold text-[#0E8A54]">
+                ആകെ ക്ലിക്കുകൾ: {selectedAdForLogs.clicks_count || clickLogs.length}
+              </span>
+            </div>
+
+            {/* Log Table Body */}
+            <div className="overflow-y-auto p-4 flex-1">
+              {loadingLogs ? (
+                <div className="py-12 text-center text-xs text-[#8A92A0]">
+                  <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[#903E97]" />
+                  <span>Supabase ad_clicks ടേബിളിൽ നിന്ന് ലോഗുകൾ ലഭ്യമാക്കുന്നു...</span>
+                </div>
+              ) : clickLogs.length === 0 ? (
+                <div className="py-12 text-center text-xs text-[#8A92A0] space-y-1">
+                  <MousePointerClick className="w-8 h-8 mx-auto text-[#D1D5DB] mb-2" />
+                  <p className="font-bold text-[#1E2229]">ക്ലിക്കുകൾ ഒന്നും രേഖപ്പെടുത്തിയിട്ടില്ല</p>
+                  <p className="text-[11px]">
+                    വെബ്‌സൈറ്റിൽ ഈ പരസ്യത്തിൽ ക്ലിക്ക് ചെയ്യുമ്പോൾ ഓരോ ക്ലിക്കിന്റെയും തീയതിയും സമയവും (Timestamp) ഇവിടെ തത്സമയം രേഖപ്പെടുത്തപ്പെടും.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-[#E2E4E8]">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#F8F9FA] border-b border-[#E2E4E8] text-[10px] font-bold text-[#58606E] uppercase">
+                      <tr>
+                        <th className="px-3 py-2.5">#</th>
+                        <th className="px-3 py-2.5">ക്ലിക്ക് സമയം (Timestamp)</th>
+                        <th className="px-3 py-2.5">പേജ് (Page URL)</th>
+                        <th className="px-3 py-2.5">റഫറർ (Referrer)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E2E4E8] text-[11px]">
+                      {clickLogs.map((log, idx) => (
+                        <tr key={log.id || `log-${idx}`} className="hover:bg-[#FAF7FC]">
+                          <td className="px-3 py-2 font-mono text-[#8A92A0]">{idx + 1}</td>
+                          <td className="px-3 py-2 font-mono font-semibold text-[#1E2229]">
+                            {new Date(log.clicked_at).toLocaleString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                              hour12: true,
+                            })}
+                          </td>
+                          <td className="px-3 py-2 truncate max-w-[180px] text-[#58606E]" title={log.page_url || ''}>
+                            {log.page_url ? new URL(log.page_url).pathname : '/'}
+                          </td>
+                          <td className="px-3 py-2 text-[#8A92A0] truncate max-w-[120px]" title={log.referrer || 'Direct'}>
+                            {log.referrer ? 'External' : 'Direct'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-[#E2E4E8] bg-[#FAF7FC] flex items-center justify-between text-xs">
+              <span className="text-[11px] text-[#8A92A0]">
+                Captured in Supabase table <code className="font-mono text-[#903E97]">public.ad_clicks</code>
+              </span>
+              <button
+                type="button"
+                onClick={() => setClickLogsModalOpen(false)}
+                className="px-4 py-1.5 rounded-xl bg-[#903E97] hover:bg-[#792f80] text-white font-bold text-xs cursor-pointer transition-colors"
+              >
+                ക്ലോസ് ചെയ്യുക (Close)
+              </button>
             </div>
           </div>
         </div>
