@@ -28,7 +28,6 @@ import {
   ExternalLink,
   Flame,
   FileText,
-  Building2,
   SlidersHorizontal,
   ChevronRight,
   ChevronLeft,
@@ -55,7 +54,7 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
   const [lastSyncResult, setLastSyncResult] = useState<UnifiedMarketSyncResults | null>(null);
 
   // Active view tab after fetch (Market News Wire is default)
-  const [activeTab, setActiveTab] = useState<'news' | 'trending' | 'ipo' | 'stock'>('news');
+  const [activeTab, setActiveTab] = useState<'news' | 'trending' | 'ipo'>('news');
   // Language filter for News Wire (Malayalam is primary and default)
   const [newsLanguage, setNewsLanguage] = useState<'malayalam' | 'all' | 'english'>('malayalam');
   // Pagination state for News Wire
@@ -65,7 +64,6 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
   // Loaded database state
   const [trendingStocks, setTrendingStocks] = useState<TrendingStockItem[]>([]);
   const [ipos, setIpos] = useState<IpoItemRecord[]>([]);
-  const [stockDossiers, setStockDossiers] = useState<any[]>([]);
   const [savedNewsList, setSavedNewsList] = useState<NewsItemRecord[]>([]);
   const [savingNewsId, setSavingNewsId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -76,15 +74,13 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
   const refreshPanelData = async () => {
     setLoading(true);
     try {
-      const [trendList, ipoList, stockList, newsList] = await Promise.all([
+      const [trendList, ipoList, newsList] = await Promise.all([
         fetchTrendingStocks(false),
         fetchIpos(false),
-        fetchSavedStockData({ endpoint: 'stock' }),
         fetchSavedNews(),
       ]);
       setTrendingStocks(trendList);
       setIpos(ipoList);
-      setStockDossiers(stockList);
       setSavedNewsList(newsList);
     } catch {}
     setLoading(false);
@@ -254,20 +250,6 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white border border-[#E2E4E8] font-mono">
               {ipos.length}
             </span>
-          </button>
-
-          {/* TAB 4: Company Lookup */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('stock')}
-            className={`flex items-center gap-2 py-3 px-3 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === 'stock'
-                ? 'border-[#6A1B9A] text-[#6A1B9A]'
-                : 'border-transparent text-[#58606E] hover:text-[#1E2229]'
-            }`}
-          >
-            <Building2 className="w-4 h-4 text-[#6A1B9A]" />
-            <span>Company Lookup</span>
           </button>
         </div>
 
@@ -796,66 +778,6 @@ export const StockDataPanel: React.FC<StockDataPanelProps> = ({
           </div>
         )}
 
-        {/* TAB CONTENT: 4. COMPANY LOOKUP */}
-        {activeTab === 'stock' && (
-          <div id="section-stock-container" className="p-5 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-[#E2E4E8]">
-              <div>
-                <h3 className="font-bold text-sm text-[#1E2229] flex items-center gap-1.5">
-                  <Building2 className="w-4 h-4 text-[#6A1B9A]" />
-                  <span>Company Fundamental Dossier</span>
-                </h3>
-                <p className="text-xs text-[#58606E]">
-                  Saved in <code className="text-xs font-mono">public.indian_stock_data</code> • Published • Powered by Yahoo Finance
-                </p>
-              </div>
-            </div>
-
-            {lastSyncResult?.stock.data && typeof lastSyncResult.stock.data === 'object' ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between bg-[#FAF7FC] p-4 rounded border border-[#DA9CFF]/40">
-                  <div>
-                    <h3 className="font-bold text-base text-[#1E2229]">
-                      {lastSyncResult.stock.data.companyName || lastSyncResult.stock.symbol || 'Company'}
-                    </h3>
-                    <p className="text-xs text-[#58606E]">
-                      Exchange: {lastSyncResult.stock.data.exchange || 'NSE'} • Symbol: {lastSyncResult.stock.data.symbol || lastSyncResult.stock.symbol}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xl font-bold font-mono text-[#0E8A54] block">
-                      {lastSyncResult.stock.data.currentPrice || '—'}
-                    </span>
-                    <span className="text-[10px] text-[#8A92A0]">Live Trade</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  <div className="p-3 bg-white rounded border border-[#E2E4E8]">
-                    <span className="text-[10px] text-[#8A92A0] uppercase block">Market Cap</span>
-                    <span className="font-bold text-[#1E2229] text-sm">{lastSyncResult.stock.data.marketCap || '—'}</span>
-                  </div>
-                  <div className="p-3 bg-white rounded border border-[#E2E4E8]">
-                    <span className="text-[10px] text-[#8A92A0] uppercase block">P/E Ratio</span>
-                    <span className="font-bold text-[#1E2229] text-sm">{lastSyncResult.stock.data.peRatio || '—'}</span>
-                  </div>
-                  <div className="p-3 bg-white rounded border border-[#E2E4E8]">
-                    <span className="text-[10px] text-[#8A92A0] uppercase block">Day High</span>
-                    <span className="font-bold text-[#0E8A54] text-sm">{lastSyncResult.stock.data.dayHigh || '—'}</span>
-                  </div>
-                  <div className="p-3 bg-white rounded border border-[#E2E4E8]">
-                    <span className="text-[10px] text-[#8A92A0] uppercase block">Day Low</span>
-                    <span className="font-bold text-[#D32F2F] text-sm">{lastSyncResult.stock.data.dayLow || '—'}</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="py-12 text-center text-xs text-[#8A92A0]">
-                No company data loaded. Click <strong>&quot;Fetch Data on Click&quot;</strong> above.
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

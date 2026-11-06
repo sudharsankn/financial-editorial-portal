@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Story, StoryFormData, MarketTickerItem } from './types/story';
-import { fetchSavedStockData, fetchTrendingStocks, fetchIpos, fetchLiveMarketSnapshot } from './lib/marketData';
+import { fetchTrendingStocks, fetchIpos, fetchLiveMarketSnapshot } from './lib/marketData';
 import { TrendingStockItem, IpoItemRecord } from './types/story';
 import {
   fetchPublishedStories,
@@ -30,23 +30,27 @@ import { MyAccountPage } from './components/MyAccountPage';
 import { StaticPageViewer, StaticPageType } from './components/StaticPageViewer';
 import { getCurrentUser, logoutUser, UserAccount } from './lib/auth';
 
+function parseCurrentRoute() {
+  const rawPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  const path = decodeURIComponent(rawPath.replace(/^\//, '').replace(/\/$/, ''));
+  if (path === 'subscribe') return { view: 'subscribe' as const, canonicalUrl: null };
+  if (path === 'my-account') return { view: 'my-account' as const, canonicalUrl: null };
+  if (path === 'about-us') return { view: 'about-us' as const, canonicalUrl: null };
+  if (path === 'contact-us') return { view: 'contact-us' as const, canonicalUrl: null };
+  if (path === 'terms-of-use') return { view: 'terms-of-use' as const, canonicalUrl: null };
+  if (path === 'privacy-policy') return { view: 'privacy-policy' as const, canonicalUrl: null };
+  if (path === 'admin') return { view: 'admin' as const, canonicalUrl: null };
+  if (path) return { view: 'article' as const, canonicalUrl: path };
+  return { view: 'feed' as const, canonicalUrl: null };
+}
+
 export default function App() {
   // Navigation & View state
+  const initialRoute = parseCurrentRoute();
   const [currentView, setCurrentView] = useState<
     'feed' | 'admin' | 'article' | 'subscribe' | 'my-account' | 'about-us' | 'contact-us' | 'terms-of-use' | 'privacy-policy'
-  >(() => {
-    const path = window.location.pathname.replace(/^\//, '');
-    if (path === 'subscribe') return 'subscribe';
-    if (path === 'my-account') return 'my-account';
-    if (path === 'about-us') return 'about-us';
-    if (path === 'contact-us') return 'contact-us';
-    if (path === 'terms-of-use') return 'terms-of-use';
-    if (path === 'privacy-policy') return 'privacy-policy';
-    if (path === 'admin') return 'admin';
-    if (path) return 'article';
-    return 'feed';
-  });
-  const [currentCanonicalUrl, setCurrentCanonicalUrl] = useState<string | null>(null);
+  >(() => initialRoute.view);
+  const [currentCanonicalUrl, setCurrentCanonicalUrl] = useState<string | null>(() => initialRoute.canonicalUrl);
   const [adminTab, setAdminTab] = useState<'stories' | 'markets' | 'stocks' | 'ads'>('stories');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -66,7 +70,6 @@ export default function App() {
   const [activeArticle, setActiveArticle] = useState<Story | null>(null);
   const [activeEditingStory, setActiveEditingStory] = useState<Story | null>(null);
   const [marketTickers, setMarketTickers] = useState<MarketTickerItem[]>([]);
-  const [publishedStockData, setPublishedStockData] = useState<any[]>([]);
   const [publishedTrendingStocks, setPublishedTrendingStocks] = useState<TrendingStockItem[]>([]);
   const [publishedIpos, setPublishedIpos] = useState<IpoItemRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -157,23 +160,17 @@ export default function App() {
     }
   }, []);
 
-  // Load published stock data, trending stocks & IPOs
+  // Load trending stocks & IPOs from fast local memory/cache (Zero Supabase calls)
   const loadPublishedStockData = useCallback(async () => {
     try {
-      const [generalData, trendingData, ipoData] = await Promise.all([
-        fetchSavedStockData({
-          is_published: true,
-          section: selectedSection !== 'All' ? selectedSection : undefined,
-          category: selectedCategory !== 'All' ? selectedCategory : undefined,
-        }),
+      const [trendingData, ipoData] = await Promise.all([
         fetchTrendingStocks(true),
         fetchIpos(true),
       ]);
-      setPublishedStockData(generalData);
       if (trendingData.length > 0) setPublishedTrendingStocks(trendingData);
       if (ipoData.length > 0) setPublishedIpos(ipoData);
     } catch {}
-  }, [selectedSection, selectedCategory]);
+  }, []);
 
   // Reload based on view
   useEffect(() => {
@@ -200,37 +197,37 @@ export default function App() {
     loadMarketTickers();
   }, [loadMarketTickers]);
 
+  // Load published stories for related & prev/next story navigation when entering article view
+  useEffect(() => {
+    if (currentView === 'article' && publishedStories.length === 0) {
+      loadSubscriberStories();
+    }
+  }, [currentView, publishedStories.length, loadSubscriberStories]);
+
   // Load specific article when canonical URL changes
   useEffect(() => {
     if (currentView === 'article' && currentCanonicalUrl) {
       setLoading(true);
-      fetchStoryByCanonicalUrl(currentCanonicalUrl).then((story) => {
-        setActiveArticle(story);
-        setLoading(false);
-      });
-      if (publishedStories.length === 0) {
-        loadSubscriberStories();
-      }
+      fetchStoryByCanonicalUrl(currentCanonicalUrl)
+        .then((story) => {
+          setActiveArticle(story);
+        })
+        .catch((err) => {
+          console.error('Error fetching story by canonical url:', err);
+          setActiveArticle(null);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
     }
-  }, [currentView, currentCanonicalUrl, publishedStories.length, loadSubscriberStories]);
+  }, [currentView, currentCanonicalUrl]);
 
   // Handle URL / Browser History synchronization
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname.replace(/^\//, '');
-      if (path === 'subscribe') {
-        setCurrentView('subscribe');
-        setCurrentCanonicalUrl(null);
-      } else if (path === 'admin') {
-        setCurrentView('admin');
-        setCurrentCanonicalUrl(null);
-      } else if (path) {
-        setCurrentCanonicalUrl(path);
-        setCurrentView('article');
-      } else {
-        setCurrentView('feed');
-        setCurrentCanonicalUrl(null);
-      }
+      const route = parseCurrentRoute();
+      setCurrentView(route.view);
+      setCurrentCanonicalUrl(route.canonicalUrl);
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -468,6 +465,15 @@ export default function App() {
             isBookmarked={bookmarkedIds.has(activeArticle.id)}
             onToggleBookmark={() => toggleBookmark(activeArticle.id)}
           />
+        )}
+
+        {/* ARTICLE LOADING SPINNER */}
+        {currentView === 'article' && loading && (
+          <div className="max-w-4xl mx-auto py-24 px-4 text-center">
+            <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-[#903E97] border-t-transparent mb-4"></div>
+            <p className="text-sm font-semibold text-[#262B2E]">ലേഖനം ലോഡുചെയ്യുന്നു...</p>
+            <p className="text-xs text-[#676A6C] mt-1">Loading article details...</p>
+          </div>
         )}
 
         {/* ARTICLE NOT FOUND */}

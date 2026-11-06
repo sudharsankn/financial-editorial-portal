@@ -1,6 +1,6 @@
 # Financial Intelligence Editorial Portal — System Documentation
 
-A high-coverage, multilingual financial editorial and market intelligence portal with real-time Indian stock market integration, automated image optimization, editorial workflow controls, and PostgreSQL persistence powered by Supabase.
+A high-coverage, multilingual financial editorial and market intelligence portal with real-time Indian stock market integration, automated image optimization, editorial workflow controls, IAB-standard advertising management, paid subscriptions with Razorpay gateway, and PostgreSQL persistence powered by Supabase.
 
 ---
 
@@ -13,7 +13,8 @@ A high-coverage, multilingual financial editorial and market intelligence portal
 | **Language** | TypeScript | `^5.7.3` | Full strict-mode typing across entities, API models, and database payloads |
 | **Styling & Theme** | Tailwind CSS | `^4.0.0` | Modern utility styling with `@tailwindcss/vite` |
 | **Icons** | Lucide React | `^0.546.0` | Lightweight SVG icons |
-| **Database & Storage** | Supabase (PostgreSQL) | `@supabase/supabase-js ^2.118.0` | Cloud database, Row Level Security (RLS), and binary Storage buckets |
+| **Database & Storage** | Supabase (PostgreSQL) | `@supabase/supabase-js ^2.118.0` | Cloud database, Row Level Security (RLS), and binary Storage buckets (`story-images`) |
+| **Payment Gateway** | Razorpay SDK | Client Checkout + Serverless | Unified payments with HMAC-SHA256 signature verification and sandbox simulator |
 | **Market Data Engine** | Free Unlimited Engine | `yahoo-finance2` + `rss-parser` | 100% Free, zero-quota market data: live NSE/BSE stock quotes, trending gainers/losers, IPOs, and multilingual financial news |
 | **News RSS Sources** | Real-Time Financial Wire | XML / RSS Feeds | Dhanam Online, GoodReturns Malayalam, TwentyFour News, LiveMint, Economic Times, Business Standard |
 | **Image Extraction** | OpenGraph / Enclosure Parser | Native HTTPS + Regex | Dynamic lead image extraction directly from publisher articles, bypassing stock fallbacks |
@@ -38,18 +39,26 @@ A high-coverage, multilingual financial editorial and market intelligence portal
 | Admin Studio (/admin)             |        | Serverless API: /api/market-data         |
 | - Market News Wire (Primary Tab)  +------->| (api/market-data.ts / vite-dev plugin)   |
 | - Stories Manager                 |        | Concurrent Promise.all Ingestion         |
-| - Live Markets Ticker Studio      |        | OpenGraph Lead Image Scraper             |
-+-----------------+-----------------+        +---------------------+--------------------+
+| - Advertisements Manager (IAB)    |        | OpenGraph Lead Image Scraper             |
+| - Live Markets Ticker Studio      |        +---------------------+--------------------+
++-----------------+-----------------+                              |
                   |                                                |
-                  | (Save / Publish)                               | (Trending, Indices, IPOs)
+                  | (CRUD / Publish / Ads / Tickers)               | (Trending, Indices, IPOs)
                   v                                                v
 +---------------------------------------------------------------------------------------+
 | Supabase PostgreSQL Database (https://yfsgudewhwialobsyrpg.supabase.co)               |
-| - public.stories (Multilingual editorial journalism)                                  |
-| - public.news (Saved raw news wire dispatches for drafting stories)                   |
+| - public.stories (Editorial journalism with UTF-8 & grapheme limits)                  |
+| - public.advertisements (IAB campaigns, duration, cost, soft-delete, and status)     |
+| - public.ad_clicks (Timestamped click tracking mapped to advertisement id)            |
+| - public.subscribers (Hashed password credentials, member profile, and auth)          |
+| - public.subscriptions (Razorpay payments, active subscriber codes, and plans)        |
 | - public.market_tickers (Top marquee tape quotes)                                     |
 | - public.trending_stocks (Live NSE/BSE gainers & losers)                             |
 | - public.ipos (Active, upcoming & listed IPOs)                                        |
+| - public.news (Saved raw news wire dispatches for drafting stories)                   |
+| - public.indian_stock_data (JSONB cache for market endpoints)                         |
+| - public.contact_inquiries (Customer inquiries submitted via Contact Us form)         |
+| - storage.buckets: 'story-images' (Article photos & ad creatives)                     |
 +------------------------------------+--------------------------------------------------+
                                      |
                                      | (is_published = true / is_active = true)
@@ -59,16 +68,17 @@ A high-coverage, multilingual financial editorial and market intelligence portal
 | - Multi-Line Mobile Market Ticker (Controls Line 1 + Full-Width Scrolling Line 2)     |
 | - Mobile Hierarchy: Pulse Header -> Compact Top Movers -> Find Stories -> Categories  |
 | - Desktop 3-Column Layout: Categories/Find Stories Sidebar | Feed Grid | Subscription |
-| - Full Pagination: Section News Container & Public Stories Grid                      |
-| - Authentic Lead Images: 100% publisher news photography parsed from original wire    |
+| - Native IAB Ad Placements: Full Story Solo, Box Listing Pos 6, Left/Right Sidebars   |
+| - Subscriber Paywall: Teaser excerpt, locked full story, and pricing upgrade modal     |
+| - Reader Tools: Font size changer (S, M, L, XL), scroll progress bar, social share    |
+| - Static Pages: About Us, Contact Us (with working DB submission), Terms, Privacy     |
+| - Full Pagination: Section News Container, Ad Campaigns Table & Public Stories Grid  |
 +---------------------------------------------------------------------------------------+
 ```
 
 ---
 
 ## 3. Environment Configuration (`.env`)
-
-The portal connects to Supabase via standard client credentials:
 
 ```env
 # Supabase Configuration (Vite Dev & Production)
@@ -81,6 +91,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_RcksFD4-e-ujGBtSDnE6Iw_VVEnOAU1
 
 # Application Host URL
 APP_URL="http://localhost:3000"
+
+# Razorpay Payment Gateway Credentials
+VITE_RAZORPAY_KEY_ID="rzp_test_9oy85KnsbS2V4P"
+RAZORPAY_KEY_ID="rzp_test_9oy85KnsbS2V4P"
+RAZORPAY_KEY_SECRET="SGNSZk9HMDxeYzR4xnT6lsoP"
 ```
 
 ---
@@ -91,72 +106,21 @@ The application uses a **100% free, unlimited market intelligence engine** that 
 
 ### How "Fetch Data on Click" Works
 
-The **"Fetch Data on Click"** action is the central data ingestion pipeline of the portal. It is triggered manually by editorial staff from the **Market News Wire** tab in the Admin Panel.
-
-#### Step 1: User Initiation
-1. The editor navigates to the Admin Studio at `/admin`.
-2. On the **Market News Wire** tab, the editor clicks the purple button **"Fetch Data on Click"** (`#btn-fetch-unified-data`).
-3. The button state changes to a spinning indicator (`Fetching All Market Data...`), disabling duplicate clicks.
-
-#### Step 2: Client Execution (`executeUnifiedMarketSync`)
-- In `src/components/StockDataPanel.tsx`, the `handleSingleClickFetch()` handler calls `executeUnifiedMarketSync('RELIANCE')` located in [`src/lib/marketData.ts`](file:///d:/financial-editorial-portal/src/lib/marketData.ts).
-- It initiates an HTTP request to the serverless endpoint:
-  ```http
-  GET /api/market-data?endpoint=unified&symbol=RELIANCE
-  ```
-- In local development, this endpoint is served by Vite's connect middleware (`vite-plugin-market-data-dev` in [`vite.config.ts`](file:///d:/financial-editorial-portal/vite.config.ts)).
-- In production on Vercel, it is handled by the serverless function in [`api/market-data.ts`](file:///d:/financial-editorial-portal/api/market-data.ts).
-- If the endpoint cannot be reached, the engine automatically falls back to client-side direct ingestion (`runClientSideMarketFallback`).
-
-#### Step 3: Concurrent Multi-Source Data Ingestion
-The backend dispatches concurrent asynchronous requests using `Promise.all`:
-
-1. **Benchmark Indices**:
-   - Queries `yahoo-finance2` for 8 key benchmark assets: `^NSEI` (NIFTY 50), `^BSESN` (SENSEX), `^NSEBANK` (NIFTY BANK), `^CNXIT` (NIFTY IT), `GC=F` (Gold), `SI=F` (Silver), `INR=X` (USD/INR), and `CL=F` (Crude Oil).
-2. **Top Gainers & Losers (Top Movers)**:
-   - Queries `yahoo-finance2` for 30 tracked Nifty large-cap equities (Reliance, TCS, HDFC Bank, Infosys, ICICI Bank, Bharti Airtel, ITC, SBI, L&T, etc.).
-   - Sorts quotes by percentage change to dynamically compute the top gainers and top pullbacks/losers.
-3. **Primary Malayalam Financial News Feeds**:
-   - **GoodReturns Malayalam Money News**: `https://malayalam.goodreturns.in/rss/feeds/malayalam-money-news-fb.xml`
-   - **Dhanam Online** (Premier Kerala Finance Publication): `https://dhanamonline.com/feed`
-   - **GoodReturns Personal Finance**: `https://malayalam.goodreturns.in/rss/feeds/malayalam-money-personal-finance-fb.xml`
-   - **TwentyFour News Share Market**: `https://www.twentyfournews.com/tag/share-market/feed`
-   - **TwentyFour News Business**: `https://www.twentyfournews.com/category/business/feed`
-   - **GoodReturns Main Malayalam**: `https://malayalam.goodreturns.in/rss/feeds/goodreturns-malayalam-fb.xml`
-   - **Google News Malayalam Business**: `https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=ml&gl=IN&ceid=IN:ml`
-4. **English Financial News Feeds**:
-   - **LiveMint Markets**: `https://www.livemint.com/rss/markets`
-   - **Economic Times Stocks**: `https://economictimes.indiatimes.com/markets/stocks/news/rssfeeds/2146842.cms`
-   - **Business Standard Markets**: `https://www.business-standard.com/rss/markets-106.rss`
-5. **IPO Tracker**:
-   - Scrapes live and upcoming SME & Mainboard IPO filings via Chittorgarh RSS / web scraper.
-
-#### Step 4: Authentic Article Lead Image Pipeline
-To ensure stories never show generic stock photos:
-- The engine inspects RSS media fields in order: `enclosure.url` $\rightarrow$ `media:content` $\rightarrow$ `media:thumbnail` $\rightarrow$ HTML embedded `<img>`.
-- If an item lacks an RSS image enclosure (common in TwentyFour News and Google News redirects), the engine invokes `fetchArticleOgImage(articleUrl)`:
-  - Fetches the target wire page with a modern browser User-Agent header.
-  - Follows redirects to the publisher's canonical destination.
-  - Parses the HTML `<meta property="og:image" content="...">` or `<meta name="twitter:image" content="...">`.
-  - Cleans and resolves relative URLs into absolute high-resolution JPEG/WebP links.
-
-#### Step 5: Database Commit & Caching
-Once the data payload is assembled:
-1. **Trending Stocks**: Formatted as `TrendingStockItem[]` and saved to `public.trending_stocks`.
-2. **Benchmark Indices**: Upserted into `public.market_tickers` and synced to `localStorage`.
-3. **IPOs**: Saved into `public.ipos` with lot size, bidding dates, and price bands.
-4. **Company Dossier**: Cached for fast fundamental lookup.
-
-#### Step 6: Editorial Presentation & Drafting
-- The fetched news dispatches are mapped into `NewsItemRecord` objects and delivered to the Admin Panel.
-- Dispatches are prioritized with **Malayalam as the default language**, complete with language filtering pills (`[മലയാളം, English, All]`) and pagination.
-- For any dispatch, the editor can click **"Save to News Table"** (`public.news`), which allows the dispatch to be selected from the "Create New Story" form and turned into a published editorial story with a single click.
+1. **User Initiation**: The editor clicks **"Fetch Data on Click"** (`#btn-fetch-unified-data`) in the Admin Panel Market News Wire tab.
+2. **Serverless Execution**: Request dispatched to `/api/market-data?endpoint=unified&symbol=RELIANCE`. Handled by Vite connect middleware in development and Vercel serverless function in production.
+3. **Multi-Source Fetch**: Parallel execution via `Promise.all` across:
+   - Yahoo Finance (Benchmark indices and 30 Nifty large-caps).
+   - Malayalam RSS feeds (GoodReturns Malayalam, Dhanam Online, TwentyFour News).
+   - English RSS feeds (LiveMint, Economic Times, Business Standard).
+   - Chittorgarh IPO Wire.
+4. **Authentic Lead Image Pipeline**: Automatically traverses `<enclosure>`, `<media:content>`, and embedded `<img>` tags. Falls back to `fetchArticleOgImage` to scrape OpenGraph metadata directly from publisher article URLs.
+5. **Database Commit & Sync**: Trending stocks saved to `public.trending_stocks`, tickers to `public.market_tickers`, and IPOs to `public.ipos`.
 
 ---
 
 ## 5. Database Schema & Tables
 
-The database operates on PostgreSQL with Row Level Security (RLS) enabled.
+The database operates on PostgreSQL with Row Level Security (RLS) enabled across all 11 tables and 1 binary storage bucket.
 
 ### 1. `public.stories`
 Stores core editorial journalism in any script with strict grapheme limits.
@@ -174,21 +138,70 @@ Stores core editorial journalism in any script with strict grapheme limits.
 - `display_order` (Integer)
 - `created_at`, `updated_at` (TIMESTAMPTZ)
 
-### 2. `public.news`
-Stores raw financial dispatches saved by editors from the Market News Wire for drafting articles.
+### 2. `public.advertisements`
+Manages IAB-standard banner and video campaigns across the portal.
 - `id` (UUID, Primary Key)
-- `title` (Text)
-- `summary` (Text)
-- `full_content` (Text)
-- `image_url` (Text)
-- `url` (Text, Source URL)
-- `source` (Text: e.g. `'ധനം ഓൺലൈൻ'`, `'GoodReturns'`, `'LiveMint'`)
-- `category` (Text)
-- `language` (Text: `'malayalam' | 'english'`)
-- `pub_date` (TIMESTAMPTZ)
+- `campaign_id` (Text, Unique: e.g. `'OH00074'`)
+- `advertiser` (Text: e.g. `'ICICI Prudential'`)
+- `brand` (Text: e.g. `'Mutual Fund'`)
+- `ad_position` (Text: `'Full Story - Solo Position' | 'Box Listing - Position 6' | 'Sidebar - Left' | 'Sidebar - Right'`)
+- `ad_type` (Text: `'Display' | 'Video'`)
+- `is_active` (Boolean: default `true`)
+- `is_deleted` (Boolean: default `false`, soft delete flag)
+- `deleted_at` (TIMESTAMPTZ: soft delete timestamp)
+- `display_ad_material` (Text: Creative banner image URL or Supabase storage path)
+- `display_ad_url` (Text: Destination click-through URL)
+- `video_ad_material` (Text: Optional video embed or file URL)
+- `start_date` (Date: Campaign start date)
+- `end_date` (Date: Campaign end date)
+- `cost_per_day` (Numeric: Daily rate in ₹)
+- `number_of_days` (Integer: Auto-calculated duration)
+- `total_cost` (Numeric: Auto-calculated total cost in ₹)
+- `impressions_count` (BigInt: Real-time views count)
+- `clicks_count` (BigInt: Real-time clicks count)
+- `created_at`, `updated_at` (TIMESTAMPTZ)
+
+### 3. `public.ad_clicks`
+Logs individual click events with high-resolution metadata for audit trails and billing verification.
+- `id` (UUID, Primary Key)
+- `advertisement_id` (Text: Optional UUID or string reference to `public.advertisements.id`)
+- `campaign_id` (Text: References `public.advertisements.campaign_id`)
+- `page_url` (Text: Current browser path where ad was clicked)
+- `referrer` (Text: Browser referrer)
+- `user_agent` (Text: Browser client string)
+- `clicked_at` (TIMESTAMPTZ: High-precision UTC timestamp)
 - `created_at` (TIMESTAMPTZ)
 
-### 3. `public.market_tickers`
+### 4. `public.subscribers`
+User accounts, authentication credentials, and membership profiles.
+- `id` (UUID, Primary Key)
+- `email` (Text, Unique)
+- `password_hash` (Text: SHA-256 cryptographically hashed digest)
+- `name` (Text: Full name)
+- `mobile` (Text: Contact number)
+- `profession` (Text: Default `'Investor / Financial Planner'`)
+- `state` (Text: Default `'Kerala'`)
+- `created_at`, `updated_at` (TIMESTAMPTZ)
+
+### 5. `public.subscriptions`
+Stores subscription purchases, Razorpay transaction links, validity periods, and membership tiers.
+- `id` (UUID, Primary Key)
+- `subscriber_id` (UUID, Foreign Key: `REFERENCES public.subscribers(id) ON DELETE CASCADE`)
+- `subscriber_code` (Text, Unique: e.g. `'HEDGE-384912'`)
+- `plan_id` (Text: `'monthly' | 'quarterly' | 'annual' | 'patron'`)
+- `plan_title` (Text: Plan display name)
+- `plan_duration` (Text: e.g. `'30 Days'`, `'365 Days'`)
+- `amount_paid` (Numeric: Amount in INR)
+- `currency` (Text: Default `'INR'`)
+- `payment_method` (Text: Default `'RAZORPAY'`)
+- `payment_id` (Text: Razorpay payment transaction ID)
+- `order_id` (Text: Razorpay order ID)
+- `status` (Text: `'active' | 'expired' | 'cancelled'`)
+- `starts_at` (TIMESTAMPTZ)
+- `expires_at` (TIMESTAMPTZ)
+- `created_at` (TIMESTAMPTZ)
+
+### 6. `public.market_tickers`
 Powers the top horizontal marquee ticker tape across all pages.
 - `id` (UUID, Primary Key)
 - `symbol` (Text: e.g. `'NIFTY 50'`, `'SENSEX'`, `'GOLD (10g)'`)
@@ -199,8 +212,8 @@ Powers the top horizontal marquee ticker tape across all pages.
 - `is_active` (Boolean)
 - `created_at`, `updated_at` (TIMESTAMPTZ)
 
-### 4. `public.trending_stocks`
-Dedicated table for market momentum movers (Top Gainers & Top Losers).
+### 7. `public.trending_stocks`
+Real-time top gainers and losers from the Indian stock market.
 - `id` (UUID, Primary Key)
 - `ticker_id` (Text: e.g. `'TATAMOTORS'`)
 - `company_name` (Text)
@@ -213,22 +226,113 @@ Dedicated table for market momentum movers (Top Gainers & Top Losers).
 - `display_order` (Integer)
 - `created_at`, `updated_at` (TIMESTAMPTZ)
 
-### 5. `public.ipos`
-Stores active, upcoming, and listed SME & Mainboard IPOs.
+### 8. `public.ipos`
+Pipeline of upcoming, ongoing, and recently listed Mainboard and SME IPOs.
 - `id` (UUID, Primary Key)
 - `symbol` (Text)
 - `name` (Text)
-- `status` (Text: `'active' | 'upcoming' | 'listed'`)
+- `status` (Text: `'upcoming' | 'ongoing' | 'listed' | 'closed'`)
 - `is_sme` (Boolean)
-- `min_price`, `max_price`, `issue_price`, `listing_price` (Numeric)
-- `lot_size` (Integer)
-- `bidding_start_date`, `bidding_end_date`, `listing_date` (Text)
+- `issue_price` (Text)
+- `issue_size` (Text)
+- `listing_date`, `open_date`, `close_date` (Text)
+- `gmp` (Text: Grey Market Premium)
+- `subscription_rate` (Text)
 - `is_published` (Boolean)
+- `display_order` (Integer)
 - `created_at` (TIMESTAMPTZ)
+
+### 9. `public.news`
+Saved raw financial dispatches from RSS ingestion, available for 1-click story drafting.
+- `id` (UUID, Primary Key)
+- `title` (Text)
+- `summary` (Text)
+- `full_content` (Text)
+- `image_url` (Text)
+- `url` (Text, Source URL)
+- `source` (Text: e.g. `'ധനം ഓൺലൈൻ'`, `'GoodReturns'`, `'LiveMint'`)
+- `category` (Text)
+- `pub_date` (Text)
+- `created_at` (TIMESTAMPTZ)
+
+### 10. `public.indian_stock_data`
+Structured JSONB storage for market API snapshots and raw endpoint caches.
+- `id` (UUID, Primary Key)
+- `endpoint` (Text: `'trending' | 'news' | 'ipo' | 'stock'`)
+- `query`, `title`, `summary` (Text)
+- `data` (JSONB)
+- `fetched_at` (TIMESTAMPTZ)
+- `section`, `category` (Text)
+- `is_published` (Boolean)
+- `display_order` (Integer)
+- `created_at`, `updated_at` (TIMESTAMPTZ)
+
+### 11. `public.contact_inquiries`
+Stores inquiries and feedback submitted via the Contact Us form.
+- `id` (UUID, Primary Key)
+- `name` (Text)
+- `email` (Text)
+- `mobile` (Text)
+- `subject` (Text)
+- `message` (Text)
+- `created_at` (TIMESTAMPTZ)
+
+### Storage Bucket: `story-images`
+Public Supabase Storage bucket for binary media assets:
+- **Max file size:** 5 MB.
+- **Allowed MIME types:** `image/jpeg`, `image/png`, `image/webp`, `image/jpg`.
 
 ---
 
-## 6. Editorial Taxonomy (Sections & Categories)
+## 6. Advertisement Engine & Campaign Manager
+
+The advertisement engine provides publisher monetization capabilities aligned with IAB standards:
+
+### Key Features
+1. **IAB Standard Placements**:
+   - `Full Story - Solo Position`: Premium banner placed at the top and midway through the full article view.
+   - `Box Listing - Position 6`: Integrated directly into the 6th slot of the center news grid on the home feed.
+   - `Sidebar - Left`: Banner placed within the desktop left navigation column.
+   - `Sidebar - Right`: Sponsorship display placed below the Market Radar in the right sidebar.
+2. **Auto-Calculations**:
+   - Selecting a `Start Date` and `End Date` automatically computes duration in days and multiplies by `Cost per Day` to calculate `Total Cost (₹)`.
+   - Editing duration automatically recalculates the `End Date`.
+3. **Frontend Dynamic Status**:
+   - If `end_date` is in the past, campaigns dynamically render an amber `Expired • തീയതി കഴിഞ്ഞു` badge without altering the database status column.
+4. **Soft Delete & Trash Management**:
+   - Deleting a campaign sets `is_deleted = true`, `is_active = false`, and records `deleted_at`.
+   - Campaigns in Trash can be restored with a single click or permanently deleted.
+5. **Timestamped Click Tracking**:
+   - User clicks on any active banner call `recordAdClick(campaignId, adId, metadata)`.
+   - Increments `clicks_count` and records a detailed audit row in `public.ad_clicks`.
+   - The "Click Logs & Timestamps" modal allows administrators to review historical click events.
+
+---
+
+## 7. Subscription Checkout & Razorpay Integration
+
+The portal features a subscriber paywall and tier management system:
+
+### Architecture
+- **Checkout Modal**: Allows readers to select between Monthly, Quarterly, Annual, and Lifetime Patron tiers.
+- **Razorpay Integration**: Loads the official Razorpay standard checkout script.
+- **Serverless Signature Verification**: Verifies `razorpay_order_id|razorpay_payment_id` using the HMAC-SHA256 signature algorithm against `RAZORPAY_KEY_SECRET`.
+- **Sandbox Fallback**: If Razorpay credentials are unset in local development, an interactive sandbox simulator completes mock transactions for end-to-end testing.
+- **Account Association**: Completed payments link the generated subscriber code directly to the authenticated subscriber in `public.subscriptions`.
+
+---
+
+## 8. Reader Experience & Paywall
+
+- **Subscriber Paywall**: Unauthenticated or free readers viewing premium investment stories see a lead excerpt with the remainder of the article blurred/locked behind a subscription banner.
+- **Dynamic Reading Progress Bar**: Positioned at the top of article detail pages, smoothly tracking scroll depth from 0% to 100%.
+- **Font Size Adjuster**: Readers can toggle between Small (14px), Medium (16px), Large (18px), and Extra Large (20px) body font sizes.
+- **Story Navigation**: Previous and Next story buttons at the bottom of article detail pages.
+- **Social Sharing**: Modal supporting WhatsApp, Facebook, X (Twitter), LinkedIn, Telegram, and Email with one-click URL copying.
+
+---
+
+## 9. Editorial Taxonomy (Sections & Categories)
 
 ### Core Sections
 1. **All Stories**: Comprehensive portal feed.
@@ -237,8 +341,7 @@ Stores active, upcoming, and listed SME & Mainboard IPOs.
 4. **Special Coverage**: Long-form investigative journalism and special reports.
 5. **IPO Watch**: Dedicated tracking of Mainboard & SME IPO pipelines.
 
-### Hedge Ohari Categories & Tags Taxonomy
-Directly mirroring `https://hedgeohari.com/`:
+### Categories & Tags Taxonomy (Directly Mirroring Hedge Ohari)
 - `Financial Planning`
 - `Big Story`
 - `Results Calendar`
@@ -260,61 +363,7 @@ Directly mirroring `https://hedgeohari.com/`:
 
 ---
 
-## 7. Key Features & Workflows
-
-### A. Admin Studio (`/admin`)
-- **Market News Wire Tab (Primary Tab)**:
-  - Trigger 1-Click ingestion via **"Fetch Data on Click"**.
-  - Filter news dispatches by language: `[മലയാളം, English, All]` (Malayalam selected by default).
-  - Search news by headline keywords.
-  - Read full article content scraped from original wires with real publisher lead photography.
-  - Click **"Save to News Table"** to store dispatches in `public.news`.
-  - Full pagination controls with items-per-page selector.
-- **Stories Manager Tab**:
-  - Full CRUD operations for articles in English, Malayalam, and other Indian scripts.
-  - Real-time grapheme length counter with 70-grapheme ceiling for headlines.
-  - Built-in 560x320 Retina image compressor and cropper with WebP/JPEG output.
-  - Automatic canonical URL slug generator supporting transliterated Indic scripts.
-  - Editorial statuses: `Draft`, `Ready to Publish`, `Published`, `Retired`.
-- **Live Markets Ticker Studio Tab**:
-  - Configure, re-order, and toggle assets on the top marquee ticker tape.
-
-### B. Public Portal (`/`) — Hedge Ohari Structure
-
-#### 1. Top Marquee Ticker (`#section-market-ticker`)
-- **Mobile Multi-Line Display**:
-  - Line 1: `#ticker-control-strip` spans full width with the green live pulse indicator, filter pills (`All`, `Indices`, `Movers`, `IPOs`), play/pause button, and 0.5x speed toggle.
-  - Line 2: `#ticker-scroller-container` takes 100% viewport width (`w-full`), providing the continuous infinite ticker tape with full screen width.
-- **Desktop Single-Line Display**: Seamless inline horizontal ribbon with status, filters, and scrolling quotes.
-
-#### 2. Mobile View Layout Hierarchy (`< 1024px`)
-Strictly ordered for optimal mobile user experience:
-1. `#section-market-pulse-desk` (starting with `#section-market-pulse-header`) at the very top.
-2. **Top Movers Ticker**:
-   - Sleek compact cards (`card-mover-${stock.id}` e.g. `card-mover-trend-live-g-1`..`g-n`): `w-[145px]` card footprint, top accent trend bar (emerald for gainers, crimson for losers), bold symbols, percentage pill, price, and news search shortcut.
-   - Next (`#btn-movers-next`) and Previous (`#btn-movers-prev`) buttons.
-   - Smooth horizontal touch swipe and CSS snap scrolling.
-3. `#section-find-stories`: Minimised by default (`filterExpanded = false`), expanding upon tap.
-4. `#section-mobile-categories`: Horizontal category filter pill scroller.
-5. `#section-stories-grid` + `#section-stories-pagination`: Editorial stories feed with previous/next page navigation.
-
-#### 3. Desktop 3-Column Layout (`>= 1024px`)
-- **Left Column (`#section-left-sidebar`)**:
-  1. `#section-desktop-categories` (Categories vertical menu first).
-  2. `#section-find-stories` (FIND STORIES taxonomy filter second, expanded by default).
-  3. `#section-journal-promo-left` (Subscription promo third).
-- **Center Feed (`#section-center-feed`)**:
-  1. `#section-market-pulse-desk` with multi-column responsive grid.
-  2. `#section-stories-grid` with 2-column cards.
-  3. `#section-stories-pagination` page navigation.
-- **Right Column (`#section-right-sidebar`)**:
-  1. `#section-journal-subscription-right` (Non-sticky subscription card).
-  2. `#section-market-radar-today` (Live benchmark index glance).
-  3. `#section-visit-hedge-at` (Official social channel links).
-
----
-
-## 8. Development & Deployment
+## 10. Development & Deployment
 
 ### Local Development
 ```bash
@@ -332,4 +381,4 @@ npx tsc --noEmit
 ```bash
 npm run build
 ```
-Creates an optimized static bundle in the `/dist` directory ready for deployment on Vercel, Netlify, or AWS CloudFront.
+Creates an optimized static bundle in the `dist/` directory ready for deployment on Vercel edge hosting.

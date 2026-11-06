@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.0] - 2026-11-06
+
+### Added
+- **Real-Time Financial Editorial Stories (Nov 6, 2026)**:
+  - Published 6 fresh, high-impact Malayalam financial editorial stories:
+    1. *LIC*: എൽഐസി ഓഹരിയിൽ സമ്മർദ്ദം; ജെഫ്രീസ് ലക്ഷ്യവില വെട്ടിക്കുറച്ചു (Investment Insights / Stock Recommendations)
+    2. *Mahindra*: മഹീന്ദ്ര ഓഹരികളിൽ വൻ കുതിപ്പ്; 25% ലാഭ വളർച്ചയുമായി മുന്നേറ്റം (Market News / Market Trends)
+    3. *Railway PSUs*: റെയിൽവേ ഓഹരികളിൽ വൻ ചലനം; IRFC, RVNL നിക്ഷേപകർ ശ്രദ്ധിക്കേണ്ടവ (Investment Insights / Stock Recommendations)
+    4. *Angel One*: സീറോധയെ മറികടന്ന് ഏയ്ഞ്ചൽ വൺ; ഇന്ത്യയിലെ രണ്ടാമത്തെ വലിയ ബ്രോക്കർ (Market News / Market Trends)
+    5. *IDBI Bank & Fairfax*: ഐഡിബിഐ ബാങ്ക്-ഫെയർഫാക്സ് ഇടപാട്; നിയമ വശങ്ങൾ ചർച്ചയാകുന്നു (Special Coverage / Banking & Finance)
+    6. *Dubai Gold*: സ്വർണവിലയിലെ അന്തരം: ദുബായിൽ നിന്ന് സ്വർണം വാങ്ങുമ്പോൾ അറിയേണ്ടവ (Investment Insights / Commodities)
+  - Enforced strict Unicode grapheme limits ($\le 70$ graphemes via `Intl.Segmenter`) and PostgreSQL `VARCHAR(70)` character limit.
+  - Dual-store publishing to Supabase `public.stories` and local seed store with automatic merge in `getLocalStories()`.
+- **IAB-Standard Advertisement Engine & Campaign Manager (`public.advertisements`)**:
+  - Implemented standard positions: `Full Story - Solo Position`, `Box Listing - Position 6`, `Sidebar - Left`, and `Sidebar - Right`.
+  - Added Admin Ads Manager with live creative preview, Supabase `story-images` bucket integration, and auto-calculation of duration (days) and total cost.
+  - Added frontend dynamic "Expired" status calculation based on end dates without database mutation.
+  - Implemented soft delete to Trash (`is_deleted = true`, `deleted_at`) with 1-click restore and permanent purge.
+  - Added campaign table pagination and page size selector.
+  - Reset all mock view/click counters to real 0.
+- **Timestamped Ad Click Analytics (`public.ad_clicks`)**:
+  - Created `public.ad_clicks` table capturing high-resolution UTC timestamps, `page_url`, `referrer`, and `user_agent` mapped to `advertisement_id` and `campaign_id`.
+  - Added interactive "Click Logs & Timestamps" modal in Admin Ads Manager.
+- **User Authentication & Subscriber Dashboard (`public.subscribers`)**:
+  - Added sign-up and sign-in workflows with SHA-256 password hashing.
+  - Added "My Account" subscriber profile dashboard and forgot/reset password flow.
+  - Enhanced explicit sign-out and session persistence.
+- **Subscription Checkout & Razorpay Payment Gateway (`public.subscriptions`)**:
+  - Integrated Razorpay standard checkout with HMAC-SHA256 signature verification.
+  - Added sandbox simulator fallback for zero-downtime offline testing.
+  - Dedicated pricing tiers: Monthly, Quarterly, Annual, and Lifetime Patron.
+- **Reader Experience & Editorial Paywall**:
+  - Implemented subscriber paywall on premium stories with teaser excerpt and locked full story.
+  - Added dynamic reading progress bar tracking scroll depth on story details.
+  - Added reader font size controls (Small, Medium, Large, Extra Large).
+  - Added Previous & Next story navigation buttons.
+  - Added multi-platform social sharing modal for WhatsApp, Facebook, X, LinkedIn, Telegram, and Email.
+- **Static Company Pages & Inquiries (`public.contact_inquiries`)**:
+  - Added authentic in-app static pages for About Us (`/about-us`), Contact Us (`/contact-us`), Terms of Use (`/terms`), and Privacy Policy (`/privacy`).
+  - Added working Contact Us form persisting inquiries directly to Supabase `public.contact_inquiries`.
+- **Database Schema Documentation**:
+  - Documented all 11 tables and `story-images` storage bucket in `README.md` and `DOCUMENTATION.md` with complete DDL, types, constraints, and indexes.
+
+---
+
 ## [2.2.0] - 2026-11-05
 
 ### Added

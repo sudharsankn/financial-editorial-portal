@@ -558,24 +558,12 @@ export async function mergeNewsIntoStories(newsArticles: any[]): Promise<number>
 }
 
 /**
- * Save Trending Stocks into public.trending_stocks table
+ * Save Trending Stocks into fast local memory & localStorage cache
+ * (Zero Supabase calls - ephemeral real-time market data)
  */
 export async function saveTrendingStocksToDedicatedTable(
   trendingStocks: TrendingStockItem[]
 ): Promise<number> {
-  const client = getSupabaseClient();
-
-  if (client) {
-    try {
-      await client.from('trending_stocks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      if (trendingStocks.length > 0) {
-        await client.from('trending_stocks').insert(trendingStocks);
-      }
-    } catch (err) {
-      console.warn('Supabase trending stocks update:', err);
-    }
-  }
-
   try {
     localStorage.setItem(LOCAL_TRENDING_KEY, JSON.stringify(trendingStocks));
   } catch {}
@@ -709,26 +697,10 @@ export const DEFAULT_TRENDING_STOCKS: TrendingStockItem[] = [
 ];
 
 /**
- * Fetch Trending Stocks
+ * Fetch Trending Stocks (Direct from fast local storage / initial seed)
+ * (Zero Supabase calls - purely client/edge live data)
  */
 export async function fetchTrendingStocks(publishedOnly: boolean = false): Promise<TrendingStockItem[]> {
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      let query = client
-        .from('trending_stocks')
-        .select('*')
-        .order('display_order', { ascending: true });
-      if (publishedOnly) {
-        query = query.eq('is_published', true);
-      }
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) {
-        return data as TrendingStockItem[];
-      }
-    } catch {}
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_TRENDING_KEY);
     if (raw) {
@@ -745,46 +717,20 @@ export async function fetchTrendingStocks(publishedOnly: boolean = false): Promi
 }
 
 /**
- * Save IPOs to dedicated Supabase ipos table + local backup
+ * Save IPOs to fast local memory & localStorage cache
+ * (Zero Supabase calls - ephemeral real-time market data)
  */
 export async function saveIposToDedicatedTable(ipos: IpoItemRecord[]) {
-  const client = getSupabaseClient();
-  if (client && ipos.length > 0) {
-    try {
-      // Clear previous list and insert fresh active IPO pipeline
-      await client.from('ipos').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      const { error } = await client.from('ipos').insert(ipos);
-      if (error) {
-        console.warn('Supabase IPOs insert error:', error);
-      }
-    } catch (err) {
-      console.warn('Supabase IPOs sync failed:', err);
-    }
-  }
-
   try {
     localStorage.setItem(LOCAL_IPOS_KEY, JSON.stringify(ipos));
   } catch {}
 }
 
 /**
- * Fetch IPOs from public.ipos table or initial curated seed
+ * Fetch IPOs from fast local memory or initial curated seed
+ * (Zero Supabase calls - purely client/edge live data)
  */
 export async function fetchIpos(publishedOnly: boolean = false): Promise<IpoItemRecord[]> {
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      let query = client.from('ipos').select('*').order('display_order', { ascending: true });
-      if (publishedOnly) {
-        query = query.eq('is_published', true);
-      }
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) {
-        return data as IpoItemRecord[];
-      }
-    } catch {}
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_IPOS_KEY);
     if (raw) {
@@ -922,30 +868,6 @@ export async function saveCompanyStockLookup(symbol: string, data: any) {
     updated_at: now,
   };
 
-  if (client) {
-    try {
-      await client.from('indian_stock_data').upsert(
-        {
-          id: record.id,
-          endpoint: 'stock',
-          stock_symbol: cleanSymbol,
-          company_name: record.company_name,
-          current_price: record.current_price,
-          market_cap: record.market_cap,
-          pe_ratio: record.pe_ratio,
-          year_high: record.year_high,
-          year_low: record.year_low,
-          raw_json: data,
-          is_published: true,
-          updated_at: now,
-        },
-        { onConflict: 'stock_symbol' }
-      );
-    } catch (err) {
-      console.warn('Supabase stock lookup:', err);
-    }
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_STOCK_LOOKUP_KEY);
     const list = raw ? JSON.parse(raw) : [];
@@ -960,7 +882,7 @@ export async function saveCompanyStockLookup(symbol: string, data: any) {
 }
 
 /**
- * Fetch saved stock lookup dossiers
+ * Fetch saved stock lookup dossiers (from local cache - zero Supabase queries)
  */
 export async function fetchSavedStockData(options?: {
   endpoint?: string;
@@ -968,20 +890,6 @@ export async function fetchSavedStockData(options?: {
   section?: string;
   category?: string;
 }) {
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      let query = client.from('indian_stock_data').select('*').order('updated_at', { ascending: false });
-      if (options?.is_published !== undefined) {
-        query = query.eq('is_published', options.is_published);
-      }
-      const { data, error } = await query;
-      if (!error && data) {
-        return data as any[];
-      }
-    } catch {}
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_STOCK_LOOKUP_KEY);
     return raw ? JSON.parse(raw) : [];
