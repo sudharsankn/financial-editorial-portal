@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import http from 'http';
 import https from 'https';
+import crypto from 'crypto';
 import { defineConfig, Plugin } from 'vite';
 import YahooFinance from 'yahoo-finance2';
 import Parser from 'rss-parser';
@@ -528,6 +529,25 @@ function marketDataDevPlugin(): Plugin {
 
             if (effAction === 'verify-payment') {
               const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
+
+              if (razorpay_order_id && razorpay_signature) {
+                const hmac = crypto.createHmac('sha256', KEY_SECRET);
+                hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+                const generatedSignature = hmac.digest('hex');
+
+                if (generatedSignature !== razorpay_signature) {
+                  res.statusCode = 400;
+                  res.end(
+                    JSON.stringify({
+                      success: false,
+                      verified: false,
+                      error: 'Invalid payment signature. Potential tampering detected.',
+                    })
+                  );
+                  return;
+                }
+              }
+
               res.statusCode = 200;
               res.end(
                 JSON.stringify({
