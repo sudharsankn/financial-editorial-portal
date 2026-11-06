@@ -79,16 +79,18 @@ export const DEFAULT_AD_CAMPAIGNS: AdCampaign[] = [
 /**
  * Fetch all active advertisements from Supabase or fallback to defaults.
  * Zero SQL injection (uses PostgREST query builders).
+ * Filters out expired ads (end_date < today) and soft-deleted ads.
  */
 export async function fetchActiveAds(): Promise<AdCampaign[]> {
+  const today = new Date().toISOString().slice(0, 10);
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      const today = new Date().toISOString().slice(0, 10);
       const { data, error } = await supabase
         .from('advertisements')
         .select('*')
         .eq('is_active', true)
+        .or('is_deleted.is.null,is_deleted.eq.false')
         .lte('start_date', today)
         .gte('end_date', today);
 
@@ -100,22 +102,121 @@ export async function fetchActiveAds(): Promise<AdCampaign[]> {
     }
   }
 
-  // Fallback to local default campaigns
+  // Fallback to local default campaigns (filter out expired or soft-deleted)
+  return DEFAULT_AD_CAMPAIGNS.filter(
+    (c) => c.is_active && !c.is_deleted && (!c.end_date || c.end_date >= today)
+  );
+}
+
+/**
+ * Fetch all advertisement campaigns for the Admin Manager studio.
+ * Returns active, paused, expired, and soft-deleted campaigns for complete governance.
+ */
+export async function fetchAllAdminAds(): Promise<AdCampaign[]> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('advertisements')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        return data as AdCampaign[];
+      }
+    } catch (err) {
+      console.warn('Supabase fetch all admin advertisements notice:', err);
+    }
+  }
+
   return DEFAULT_AD_CAMPAIGNS;
 }
 
 /**
  * Select active ad for a specific placement position.
+ * Strictly avoids expired (end_date < today) or soft-deleted campaigns.
  */
 export function getAdForPosition(ads: AdCampaign[], position: AdPosition): AdCampaign | null {
-  const matching = ads.filter((ad) => ad.ad_position === position && ad.is_active !== false);
+  const today = new Date().toISOString().slice(0, 10);
+  const matching = ads.filter(
+    (ad) =>
+      ad.ad_position === position &&
+      ad.is_active !== false &&
+      !ad.is_deleted &&
+      (!ad.end_date || ad.end_date >= today)
+  );
+
   if (matching.length === 0) {
-    // Check fallback
-    const fallback = DEFAULT_AD_CAMPAIGNS.find((a) => a.ad_position === position);
+    const fallback = DEFAULT_AD_CAMPAIGNS.find(
+      (a) =>
+        a.ad_position === position &&
+        a.is_active !== false &&
+        !a.is_deleted &&
+        (!a.end_date || a.end_date >= today)
+    );
     return fallback || null;
   }
-  // Return the first matching or randomly pick if multiple
   return matching[0];
+}
+
+/**
+ * Soft delete an advertisement campaign (archives rather than permanently purges).
+ */
+export async function softDeleteCampaign(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from('advertisements')
+        .update({
+          is_deleted: true,
+          is_active: false,
+          deleted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (!error) return true;
+
+      // Fallback if is_deleted column is not yet on DB
+      await supabase
+        .from('advertisements')
+        .update({
+          is_active: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+      return true;
+    } catch (err) {
+      console.warn('Supabase soft delete notice:', err);
+    }
+  }
+  return false;
+}
+
+/**
+ * Restore a soft-deleted advertisement campaign.
+ */
+export async function restoreCampaign(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from('advertisements')
+        .update({
+          is_deleted: false,
+          is_active: true,
+          deleted_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (!error) return true;
+    } catch (err) {
+      console.warn('Supabase restore ad notice:', err);
+    }
+  }
+  return false;
 }
 
 /**

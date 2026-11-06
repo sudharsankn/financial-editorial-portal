@@ -14,6 +14,8 @@ export interface AdCampaign {
   ad_position: AdPosition;
   ad_type: AdType;
   is_active: boolean;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
   display_ad_material: string; // image path or URL (e.g. '/ads/icici-sip.jpg')
   display_ad_url: string; // click destination URL
   video_ad_material?: string | null;

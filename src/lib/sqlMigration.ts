@@ -300,6 +300,8 @@ CREATE TABLE IF NOT EXISTS public.advertisements (
   ad_position TEXT NOT NULL CHECK (ad_position IN ('Full Story - Solo Position', 'Box Listing - Position 6', 'Sidebar - Left', 'Sidebar - Right')),
   ad_type TEXT NOT NULL DEFAULT 'Display' CHECK (ad_type IN ('Display', 'Video')),
   is_active BOOLEAN NOT NULL DEFAULT true,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
   display_ad_material TEXT NOT NULL,
   display_ad_url TEXT NOT NULL,
   video_ad_material TEXT,

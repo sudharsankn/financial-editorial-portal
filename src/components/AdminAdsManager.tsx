@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AdCampaign, AdPosition, AdType } from '../types/ad';
 import {
   fetchActiveAds,
+  fetchAllAdminAds,
   DEFAULT_AD_CAMPAIGNS,
   uploadAdImageToSupabase,
+  softDeleteCampaign,
+  restoreCampaign,
 } from '../lib/adService';
 import { getSupabaseClient } from '../lib/supabase';
 import {
@@ -25,6 +28,14 @@ import {
   Check,
   Link,
   FileImage,
+  Clock,
+  RotateCcw,
+  Search,
+  Pause,
+  Archive,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
 } from 'lucide-react';
 
 export const AdminAdsManager: React.FC = () => {
@@ -42,10 +53,23 @@ export const AdminAdsManager: React.FC = () => {
   const [editingCampaign, setEditingCampaign] = useState<AdCampaign | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Filters & Pagination State
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expired' | 'paused' | 'trash'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+
   // Image Upload & Import State
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadSuccessNotice, setUploadSuccessNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Helper to check if campaign end date has crossed (Frontend only check)
+  const isCampaignExpired = (endDateStr: string): boolean => {
+    if (!endDateStr) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return endDateStr < today;
+  };
 
   // Form State
   const initialFormState: Omit<AdCampaign, 'id'> = {
@@ -74,7 +98,7 @@ export const AdminAdsManager: React.FC = () => {
     const loadAds = async () => {
       setLoading(true);
       try {
-        const ads = await fetchActiveAds();
+        const ads = await fetchAllAdminAds();
         if (ads && ads.length > 0) {
           setCampaigns(ads);
           localStorage.setItem('hedge_ad_campaigns', JSON.stringify(ads));
@@ -239,6 +263,8 @@ export const AdminAdsManager: React.FC = () => {
     const campaignRecord: AdCampaign = {
       id: editingCampaign ? editingCampaign.id : `ad_${Date.now()}`,
       ...formData,
+      is_deleted: false,
+      deleted_at: null,
     };
 
     // 1. Sync to Supabase table (parameterized query - zero SQL injection)
@@ -255,6 +281,8 @@ export const AdminAdsManager: React.FC = () => {
               ad_position: campaignRecord.ad_position,
               ad_type: campaignRecord.ad_type,
               is_active: campaignRecord.is_active,
+              is_deleted: false,
+              deleted_at: null,
               display_ad_material: campaignRecord.display_ad_material,
               display_ad_url: campaignRecord.display_ad_url,
               video_ad_material: campaignRecord.video_ad_material || null,
@@ -307,8 +335,50 @@ export const AdminAdsManager: React.FC = () => {
     });
   };
 
-  const handleDeleteCampaign = async (id: string, campaignId: string) => {
-    if (!window.confirm(`Delete advertisement campaign ${campaignId}?`)) return;
+  const handleSoftDeleteCampaign = async (id: string, campaignId: string) => {
+    if (
+      !window.confirm(
+        `കാമ്പെയ്ൻ ${campaignId} സോഫ്റ്റ് ഡിലീറ്റ് ചെയ്യണോ? (Soft delete campaign? It will be moved to Trash and stopped from serving).`
+      )
+    ) {
+      return;
+    }
+
+    await softDeleteCampaign(id);
+
+    const updated = campaigns.map((c) =>
+      c.id === id
+        ? { ...c, is_deleted: true, is_active: false, deleted_at: new Date().toISOString() }
+        : c
+    );
+    persistCampaigns(updated);
+    setMessage({
+      type: 'success',
+      text: `കാമ്പെയ്ൻ ${campaignId} സോഫ്റ്റ് ഡിലീറ്റ് ചെയ്തു (Moved to Trash).`,
+    });
+  };
+
+  const handleRestoreCampaign = async (id: string, campaignId: string) => {
+    await restoreCampaign(id);
+
+    const updated = campaigns.map((c) =>
+      c.id === id ? { ...c, is_deleted: false, is_active: true, deleted_at: null } : c
+    );
+    persistCampaigns(updated);
+    setMessage({
+      type: 'success',
+      text: `കാമ്പെയ്ൻ ${campaignId} വിജയകരമായി പുനഃസ്ഥാപിച്ചു (Restored to Active).`,
+    });
+  };
+
+  const handlePermanentDelete = async (id: string, campaignId: string) => {
+    if (
+      !window.confirm(
+        `കാമ്പെയ്ൻ ${campaignId} സ്ഥിരമായി ഡിലീറ്റ് ചെയ്യണോ? (Permanently delete? This cannot be undone).`
+      )
+    ) {
+      return;
+    }
 
     const supabase = getSupabaseClient();
     if (supabase) {
@@ -319,10 +389,24 @@ export const AdminAdsManager: React.FC = () => {
 
     const updated = campaigns.filter((c) => c.id !== id);
     persistCampaigns(updated);
-    setMessage({ type: 'success', text: `Campaign ${campaignId} deleted.` });
+    setMessage({
+      type: 'success',
+      text: `കാമ്പെയ്ൻ ${campaignId} സ്ഥിരമായി നീക്കം ചെയ്തു (Permanently purged).`,
+    });
   };
 
   const handleToggleActive = async (campaign: AdCampaign) => {
+    if (isCampaignExpired(campaign.end_date)) {
+      if (
+        window.confirm(
+          `ഈ കാമ്പെയ്‌ന്റെ തീയതി കഴിഞ്ഞു (${campaign.end_date} - Expired). കാലാവധി നീട്ടാൻ എഡിറ്റ് ചെയ്യണോ?`
+        )
+      ) {
+        handleOpenEditModal(campaign);
+      }
+      return;
+    }
+
     const updatedStatus = !campaign.is_active;
     const updated = campaigns.map((c) =>
       c.id === campaign.id ? { ...c, is_active: updatedStatus } : c
@@ -340,6 +424,58 @@ export const AdminAdsManager: React.FC = () => {
     }
   };
 
+  // Metrics Calculations
+  const activeCount = campaigns.filter(
+    (c) => c.is_active && !c.is_deleted && !isCampaignExpired(c.end_date)
+  ).length;
+  const expiredCount = campaigns.filter(
+    (c) => !c.is_deleted && isCampaignExpired(c.end_date)
+  ).length;
+  const pausedCount = campaigns.filter(
+    (c) => !c.is_deleted && !c.is_active && !isCampaignExpired(c.end_date)
+  ).length;
+  const trashCount = campaigns.filter((c) => !!c.is_deleted).length;
+  const totalNonDeleted = campaigns.filter((c) => !c.is_deleted).length;
+
+  const totalImpressions = campaigns.reduce((acc, c) => acc + (c.impressions_count || 0), 0);
+  const totalClicks = campaigns.reduce((acc, c) => acc + (c.clicks_count || 0), 0);
+  const avgCtr = totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100).toFixed(1) : '0';
+
+  // Filtered campaigns for table
+  const filteredCampaigns = useMemo(() => {
+    return campaigns.filter((ad) => {
+      const isExpired = isCampaignExpired(ad.end_date);
+      const isDel = !!ad.is_deleted;
+
+      if (statusFilter === 'active' && (!ad.is_active || isExpired || isDel)) return false;
+      if (statusFilter === 'expired' && (!isExpired || isDel)) return false;
+      if (statusFilter === 'paused' && (ad.is_active || isExpired || isDel)) return false;
+      if (statusFilter === 'trash' && !isDel) return false;
+      if (statusFilter === 'all' && isDel) return false;
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const match =
+          ad.campaign_id.toLowerCase().includes(q) ||
+          ad.advertiser.toLowerCase().includes(q) ||
+          ad.brand.toLowerCase().includes(q) ||
+          ad.ad_position.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [campaigns, statusFilter, searchQuery]);
+
+  // Pagination calculations
+  const totalPages = Math.max(1, Math.ceil(filteredCampaigns.length / itemsPerPage));
+  const validCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (validCurrentPage - 1) * itemsPerPage;
+  const paginatedCampaigns = filteredCampaigns.slice(startIndex, startIndex + itemsPerPage);
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(Math.max(1, Math.min(newPage, totalPages)));
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner & Metric Summary */}
@@ -354,7 +490,7 @@ export const AdminAdsManager: React.FC = () => {
             </h2>
           </div>
           <p className="text-xs text-[#58606E]">
-            ഹോം പേജ് സൈഡ്ബാറുകൾ, സ്റ്റോറികൾക്കിടയിലെ ബാനർ, ആർട്ടിക്കിൾ സോളോ പരസ്യങ്ങൾ എന്നിവ നിയന്ത്രിക്കുക.
+            IAB Standard Ad Placements: 300×250 (Sidebars), 728×180 (Between Stories), Solo Story Ads.
           </p>
         </div>
 
@@ -368,34 +504,190 @@ export const AdminAdsManager: React.FC = () => {
         </button>
       </div>
 
+      {/* KPI Metric Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="bg-white p-3.5 rounded-xl border border-[#E2E4E8] shadow-xs">
+          <div className="text-[11px] font-semibold text-[#58606E] mb-1">ആക്ടീവ് (Active)</div>
+          <div className="text-xl font-bold text-[#0E8A54] flex items-center gap-1.5">
+            <span>{activeCount}</span>
+            <span className="text-[10px] font-normal text-[#8A92A0]">/ {totalNonDeleted}</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-[#E2E4E8] shadow-xs">
+          <div className="text-[11px] font-semibold text-[#58606E] mb-1">തീയതി കഴിഞ്ഞവ (Expired)</div>
+          <div className="text-xl font-bold text-amber-600 flex items-center gap-1.5">
+            <Clock className="w-4 h-4 shrink-0" />
+            <span>{expiredCount}</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-[#E2E4E8] shadow-xs">
+          <div className="text-[11px] font-semibold text-[#58606E] mb-1">നിഷ്‌ക്രിയം (Paused)</div>
+          <div className="text-xl font-bold text-[#8A92A0] flex items-center gap-1.5">
+            <Pause className="w-4 h-4 shrink-0" />
+            <span>{pausedCount}</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-[#E2E4E8] shadow-xs">
+          <div className="text-[11px] font-semibold text-[#58606E] mb-1">ഡിലീറ്റ് ചെയ്തവ (Trash)</div>
+          <div className="text-xl font-bold text-red-600 flex items-center gap-1.5">
+            <Archive className="w-4 h-4 shrink-0" />
+            <span>{trashCount}</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-[#E2E4E8] shadow-xs">
+          <div className="text-[11px] font-semibold text-[#58606E] mb-1">Total Impressions</div>
+          <div className="text-xl font-bold text-[#903E97] flex items-center gap-1.5">
+            <span>{totalImpressions.toLocaleString()}</span>
+            <span className="text-[10px] font-medium text-[#0E8A54] ml-auto">({avgCtr}% CTR)</span>
+          </div>
+        </div>
+      </div>
+
       {message && (
         <div
-          className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+          className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 animate-fadeIn ${
             message.type === 'success'
               ? 'bg-[#E8F5EE] border-[#0E8A54]/30 text-[#0E8A54]'
               : 'bg-red-50 border-red-200 text-red-700'
           }`}
         >
-          {message.type === 'success' ? (
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-          ) : (
-            <AlertCircle className="w-4 h-4 shrink-0" />
-          )}
-          <span>{message.text}</span>
+          <div className="flex items-center gap-2">
+            {message.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 shrink-0" />
+            )}
+            <span>{message.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMessage(null)}
+            className="p-1 hover:opacity-70 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
-      {/* Campaigns Table */}
+      {/* Campaigns Table Container with Status Tabs and Search */}
       <div className="bg-white rounded-xl border border-[#E2E4E8] shadow-xs overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-[#E2E4E8] bg-[#FAF7FC] flex items-center justify-between">
-          <span className="text-xs font-bold text-[#1E2229] uppercase tracking-wider">
-            ആക്ടീവ് പരസ്യ കാമ്പെയ്നുകൾ ({campaigns.length})
-          </span>
-          <span className="text-[11px] text-[#58606E]">
-            IAB Standard Placements: 300×250 (Sidebars) &amp; 728×180 (Between Stories)
-          </span>
+        {/* Table Filter Tabs & Search Header */}
+        <div className="p-4 border-b border-[#E2E4E8] bg-[#FAF7FC] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Status Tabs */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('all');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                statusFilter === 'all'
+                  ? 'bg-[#903E97] text-white shadow-xs'
+                  : 'bg-white text-[#58606E] border border-[#E2E4E8] hover:bg-[#FAF7FC]'
+              }`}
+            >
+              എല്ലാം ({totalNonDeleted})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('active');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                statusFilter === 'active'
+                  ? 'bg-[#0E8A54] text-white shadow-xs'
+                  : 'bg-white text-[#58606E] border border-[#E2E4E8] hover:bg-[#FAF7FC]'
+              }`}
+            >
+              <CheckCircle2 className="w-3 h-3" />
+              <span>സജീവം ({activeCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('expired');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                statusFilter === 'expired'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-white text-[#58606E] border border-[#E2E4E8] hover:bg-[#FAF7FC]'
+              }`}
+            >
+              <Clock className="w-3 h-3" />
+              <span>തീയതി കഴിഞ്ഞവ ({expiredCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('paused');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                statusFilter === 'paused'
+                  ? 'bg-[#58606E] text-white shadow-xs'
+                  : 'bg-white text-[#58606E] border border-[#E2E4E8] hover:bg-[#FAF7FC]'
+              }`}
+            >
+              <Pause className="w-3 h-3" />
+              <span>നിഷ്‌ക്രിയം ({pausedCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('trash');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                statusFilter === 'trash'
+                  ? 'bg-red-600 text-white shadow-xs'
+                  : 'bg-white text-[#58606E] border border-[#E2E4E8] hover:bg-[#FAF7FC]'
+              }`}
+            >
+              <Archive className="w-3 h-3" />
+              <span>Trash ({trashCount})</span>
+            </button>
+          </div>
+
+          {/* Search Box */}
+          <div className="relative min-w-[240px]">
+            <Search className="w-3.5 h-3.5 text-[#8A92A0] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Search Campaign ID, Brand..."
+              className="w-full pl-8 pr-7 py-1.5 bg-white border border-[#E2E4E8] rounded-lg text-xs text-[#1E2229] outline-none focus:border-[#903E97]"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setCurrentPage(1);
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8A92A0] hover:text-[#1E2229]"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
         </div>
 
+        {/* Table Content */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-[#1E2229]">
             <thead className="bg-[#F8F9FA] border-b border-[#E2E4E8] text-[11px] font-bold text-[#58606E] uppercase">
@@ -403,118 +695,287 @@ export const AdminAdsManager: React.FC = () => {
                 <th className="px-4 py-3">Campaign / Advertiser</th>
                 <th className="px-4 py-3">Placement Position</th>
                 <th className="px-4 py-3">Creative Preview</th>
-                <th className="px-4 py-3">Flight Dates</th>
+                <th className="px-4 py-3">Flight Dates &amp; Cost</th>
                 <th className="px-4 py-3">Performance</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E4E8]">
-              {campaigns.map((ad) => (
-                <tr key={ad.id} className="hover:bg-[#FAF7FC] transition-colors">
-                  <td className="px-4 py-3.5">
-                    <div className="font-mono text-[11px] font-bold text-[#903E97] mb-0.5">
-                      {ad.campaign_id}
+              {paginatedCampaigns.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center text-[#8A92A0]">
+                    <div className="max-w-xs mx-auto space-y-2">
+                      <Layers className="w-8 h-8 mx-auto text-[#D1D5DB]" />
+                      <p className="font-semibold text-xs text-[#1E2229]">കാമ്പെയ്നുകൾ ലഭ്യമല്ല (No campaigns found)</p>
+                      <p className="text-[11px] text-[#8A92A0]">
+                        തിരഞ്ഞെടുത്ത ഫിൽട്ടറിൽ പരസ്യങ്ങൾ ഇല്ല. ഫിൽട്ടർ മാറ്റി നോക്കുക.
+                      </p>
                     </div>
-                    <div className="font-bold text-[#1E2229]">{ad.advertiser}</div>
-                    <div className="text-[11px] text-[#58606E]">{ad.brand}</div>
-                  </td>
-
-                  <td className="px-4 py-3.5">
-                    <span className="inline-block px-2.5 py-1 rounded text-[11px] font-bold uppercase tracking-wider bg-[#FAF7FC] text-[#903E97] border border-[#EADDF0]">
-                      {ad.ad_position}
-                    </span>
-                    <div className="text-[10px] text-[#8A92A0] mt-1">
-                      Type: {ad.ad_type}
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-12 rounded border border-[#E2E4E8] bg-[#F2F2F2] overflow-hidden shrink-0">
-                        <img
-                          src={ad.display_ad_material}
-                          alt={ad.advertiser}
-                          className="w-full h-full object-cover object-top"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/ads/icici-sip.jpg';
-                          }}
-                        />
-                      </div>
-                      <a
-                        href={ad.display_ad_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[11px] text-[#903E97] hover:underline flex items-center gap-1 font-semibold truncate max-w-[120px]"
-                        title={ad.display_ad_url}
-                      >
-                        <span>Link</span>
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-3.5 text-[11px] text-[#58606E]">
-                    <div className="font-semibold text-[#1E2229]">
-                      {ad.start_date} → {ad.end_date}
-                    </div>
-                    <div className="text-[10px] text-[#8A92A0]">
-                      {ad.number_of_days} Days @ ₹{ad.cost_per_day}/day
-                    </div>
-                    <div className="text-[11px] font-bold text-[#0E8A54] mt-0.5">
-                      Total: ₹{Number(ad.total_cost || ((ad.number_of_days || 1) * (ad.cost_per_day || 0))).toLocaleString('en-IN')}
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-3.5 text-[11px]">
-                    <div className="font-semibold text-[#1E2229]">
-                      {ad.impressions_count || 0} views
-                    </div>
-                    <div className="text-[10px] text-[#0E8A54] font-bold">
-                      {ad.clicks_count || 0} clicks (
-                      {(ad.impressions_count && ad.clicks_count
-                        ? ((ad.clicks_count / ad.impressions_count) * 100).toFixed(1)
-                        : 0)}
-                      % CTR)
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-3.5">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleActive(ad)}
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase cursor-pointer transition-colors ${
-                        ad.is_active
-                          ? 'bg-[#E8F5EE] text-[#0E8A54] hover:bg-[#d4ede0]'
-                          : 'bg-[#F2F2F2] text-[#8A92A0] hover:bg-[#e6e6e6]'
-                      }`}
-                    >
-                      {ad.is_active ? 'Active' : 'Paused'}
-                    </button>
-                  </td>
-
-                  <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEditModal(ad)}
-                      className="p-1.5 rounded hover:bg-[#FAF7FC] text-[#58606E] hover:text-[#903E97] transition-colors cursor-pointer"
-                      title="Edit Campaign"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteCampaign(ad.id, ad.campaign_id)}
-                      className="p-1.5 rounded hover:bg-red-50 text-[#58606E] hover:text-red-600 transition-colors cursor-pointer"
-                      title="Delete Campaign"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                paginatedCampaigns.map((ad) => {
+                  const isExpired = isCampaignExpired(ad.end_date);
+                  const isDel = !!ad.is_deleted;
+
+                  return (
+                    <tr
+                      key={ad.id}
+                      className={`transition-colors ${
+                        isDel
+                          ? 'bg-red-50/40 hover:bg-red-50/70'
+                          : isExpired
+                          ? 'bg-amber-50/30 hover:bg-amber-50/60'
+                          : 'hover:bg-[#FAF7FC]'
+                      }`}
+                    >
+                      <td className="px-4 py-3.5">
+                        <div className="font-mono text-[11px] font-bold text-[#903E97] mb-0.5">
+                          {ad.campaign_id}
+                        </div>
+                        <div className="font-bold text-[#1E2229]">{ad.advertiser}</div>
+                        <div className="text-[11px] text-[#58606E]">{ad.brand}</div>
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <span className="inline-block px-2.5 py-1 rounded text-[11px] font-bold uppercase tracking-wider bg-[#FAF7FC] text-[#903E97] border border-[#EADDF0]">
+                          {ad.ad_position}
+                        </span>
+                        <div className="text-[10px] text-[#8A92A0] mt-1">
+                          Type: {ad.ad_type}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-12 rounded border border-[#E2E4E8] bg-[#F2F2F2] overflow-hidden shrink-0">
+                            <img
+                              src={ad.display_ad_material}
+                              alt={ad.advertiser}
+                              className="w-full h-full object-cover object-top"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/ads/icici-sip.jpg';
+                              }}
+                            />
+                          </div>
+                          <a
+                            href={ad.display_ad_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] text-[#903E97] hover:underline flex items-center gap-1 font-semibold truncate max-w-[120px]"
+                            title={ad.display_ad_url}
+                          >
+                            <span>Link</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-[11px] text-[#58606E]">
+                        <div className="font-semibold text-[#1E2229]">
+                          {ad.start_date} → {ad.end_date}
+                        </div>
+                        <div className="text-[10px] text-[#8A92A0]">
+                          {ad.number_of_days} Days @ ₹{ad.cost_per_day}/day
+                        </div>
+                        <div className="text-[11px] font-bold text-[#0E8A54] mt-0.5">
+                          Total: ₹{Number(ad.total_cost || ((ad.number_of_days || 1) * (ad.cost_per_day || 0))).toLocaleString('en-IN')}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-[11px]">
+                        <div className="font-semibold text-[#1E2229]">
+                          {ad.impressions_count || 0} views
+                        </div>
+                        <div className="text-[10px] text-[#0E8A54] font-bold">
+                          {ad.clicks_count || 0} clicks (
+                          {(ad.impressions_count && ad.clicks_count
+                            ? ((ad.clicks_count / ad.impressions_count) * 100).toFixed(1)
+                            : 0)}
+                          % CTR)
+                        </div>
+                      </td>
+
+                      {/* Status Column: Expired (Frontend check), Deleted, Paused, or Active */}
+                      <td className="px-4 py-3.5">
+                        {isDel ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-red-100 text-red-700 border border-red-200">
+                            <Archive className="w-3 h-3" />
+                            <span>Soft Deleted</span>
+                          </span>
+                        ) : isExpired ? (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleActive(ad)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-300 transition-colors cursor-pointer"
+                            title={`Flight expired on ${ad.end_date}. Click to extend end date.`}
+                          >
+                            <Clock className="w-3 h-3" />
+                            <span>Expired</span>
+                          </button>
+                        ) : !ad.is_active ? (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleActive(ad)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-[#F2F2F2] text-[#8A92A0] hover:bg-[#e6e6e6] border border-[#E2E4E8] cursor-pointer transition-colors"
+                            title="Paused. Click to activate."
+                          >
+                            <Pause className="w-3 h-3" />
+                            <span>Paused</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleActive(ad)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-[#E8F5EE] text-[#0E8A54] hover:bg-[#d4ede0] border border-[#0E8A54]/20 cursor-pointer transition-colors"
+                            title="Active. Click to pause."
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Active</span>
+                          </button>
+                        )}
+                      </td>
+
+                      {/* Actions Column */}
+                      <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
+                        {isDel ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleRestoreCampaign(ad.id, ad.campaign_id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FAF7FC] hover:bg-[#903E97]/10 text-[#903E97] border border-[#EADDF0] text-[11px] font-bold transition-colors cursor-pointer"
+                              title="Restore Campaign"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Restore</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handlePermanentDelete(ad.id, ad.campaign_id)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-[#8A92A0] hover:text-red-600 transition-colors cursor-pointer"
+                              title="Permanently Delete Campaign"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(ad)}
+                              className="p-1.5 rounded-lg hover:bg-[#FAF7FC] text-[#58606E] hover:text-[#903E97] transition-colors cursor-pointer"
+                              title="Edit Campaign"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSoftDeleteCampaign(ad.id, ad.campaign_id)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-[#58606E] hover:text-red-600 transition-colors cursor-pointer"
+                              title="Soft Delete Campaign (Archive)"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Bar */}
+        <div className="px-5 py-3.5 bg-[#FAF7FC] border-t border-[#E2E4E8] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#58606E]">
+          <div className="flex items-center gap-3">
+            <span>
+              Showing <strong className="text-[#1E2229]">{filteredCampaigns.length === 0 ? 0 : startIndex + 1}</strong>
+              –<strong className="text-[#1E2229]">{Math.min(startIndex + itemsPerPage, filteredCampaigns.length)}</strong> of{' '}
+              <strong className="text-[#1E2229]">{filteredCampaigns.length}</strong> campaigns
+            </span>
+            <span className="text-[#D1D5DB] hidden sm:inline">|</span>
+            <div className="flex items-center gap-1.5">
+              <span>Per page:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2 py-1 rounded-lg border border-[#E2E4E8] bg-white text-xs font-semibold text-[#1E2229] outline-none focus:border-[#903E97]"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Page Navigation Controls */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handlePageChange(validCurrentPage - 1)}
+              disabled={validCurrentPage <= 1}
+              className="px-2.5 py-1.5 rounded-lg border border-[#E2E4E8] bg-white text-[#1E2229] hover:bg-[#FAF7FC] hover:border-[#903E97]/40 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-[#E2E4E8] transition-all flex items-center gap-1 font-semibold cursor-pointer disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Prev</span>
+            </button>
+
+            {/* Numeric page buttons */}
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter((p) => {
+                if (totalPages <= 5) return true;
+                if (p === 1 || p === totalPages) return true;
+                return Math.abs(p - validCurrentPage) <= 1;
+              })
+              .reduce<(number | string)[]>((acc, p, i, arr) => {
+                if (i > 0 && p - (arr[i - 1] as number) > 1) {
+                  acc.push('...');
+                }
+                acc.push(p);
+                return acc;
+              }, [])
+              .map((item, idx) => {
+                if (item === '...') {
+                  return (
+                    <span key={`ad-ellipsis-${idx}`} className="px-2 text-xs text-[#878787]">
+                      ...
+                    </span>
+                  );
+                }
+                const p = item as number;
+                const isActive = p === validCurrentPage;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => handlePageChange(p)}
+                    className={`min-w-8 h-8 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-[#903E97] text-white shadow-xs'
+                        : 'bg-white border border-[#E2E4E8] text-[#1E2229] hover:bg-[#FAF7FC] hover:border-[#903E97]/40'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+
+            <button
+              type="button"
+              onClick={() => handlePageChange(validCurrentPage + 1)}
+              disabled={validCurrentPage >= totalPages}
+              className="px-2.5 py-1.5 rounded-lg border border-[#E2E4E8] bg-white text-[#1E2229] hover:bg-[#FAF7FC] hover:border-[#903E97]/40 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-[#E2E4E8] transition-all flex items-center gap-1 font-semibold cursor-pointer disabled:cursor-not-allowed"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
