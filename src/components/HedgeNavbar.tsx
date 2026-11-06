@@ -118,9 +118,11 @@ export const HedgeNavbar: React.FC<HedgeNavbarProps> = ({
                 id="btn-navbar-signin"
                 type="button"
                 onClick={onOpenSignIn}
-                className="px-2.5 sm:px-3 py-1.5 text-[11px] font-bold text-[#262B2E] hover:text-[#903E97] transition-colors uppercase tracking-wider cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E6E6E6] hover:border-[#903E97]/50 text-xs font-bold text-[#262B2E] hover:text-[#903E97] hover:bg-[#FAF7FC] transition-all uppercase tracking-wider cursor-pointer"
+                title="Sign In to Journal"
               >
-                SIGN IN
+                <User className="w-3.5 h-3.5 text-[#903E97]" />
+                <span>SIGN IN</span>
               </button>
             )}
 

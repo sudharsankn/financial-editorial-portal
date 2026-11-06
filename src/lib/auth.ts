@@ -23,6 +23,7 @@ export interface UserAccount {
 const STORAGE_KEY_USER = 'hedge_user';
 const STORAGE_KEY_SUB = 'hedge_subscription_record';
 const STORAGE_KEY_IS_SUB = 'hedge_is_subscribed';
+const STORAGE_KEY_LOGGED_OUT = 'hedge_explicit_logout';
 
 // Calculate days remaining between today and an expiry string
 export function calculateDaysRemaining(expiryStr: string): number {
@@ -65,6 +66,11 @@ export function parseStoredSubscription(): SubscriptionInfo | null {
 // Get current logged-in user
 export function getCurrentUser(): UserAccount | null {
   try {
+    // If user explicitly signed out, do not auto-login
+    if (localStorage.getItem(STORAGE_KEY_LOGGED_OUT) === 'true') {
+      return null;
+    }
+
     const rawUser = localStorage.getItem(STORAGE_KEY_USER);
     const existingSub = parseStoredSubscription();
 
@@ -102,6 +108,7 @@ export function getCurrentUser(): UserAccount | null {
 export function saveCurrentUser(user: UserAccount | null): void {
   try {
     if (user) {
+      localStorage.removeItem(STORAGE_KEY_LOGGED_OUT);
       localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
       if (user.subscription && user.subscription.status === 'active') {
         localStorage.setItem(STORAGE_KEY_IS_SUB, 'true');
@@ -122,6 +129,11 @@ export async function loginUser(email: string, password: string): Promise<UserAc
   if (!password || password.length < 4) {
     throw new Error('പാസ്‌വേഡ് കുറഞ്ഞത് 4 അക്ഷരങ്ങൾ ഉണ്ടായിരിക്കണം (Password must be at least 4 characters)');
   }
+
+  // Clear any logout flag
+  try {
+    localStorage.removeItem(STORAGE_KEY_LOGGED_OUT);
+  } catch {}
 
   // Artificial short delay for realistic auth feedback
   await new Promise((res) => setTimeout(res, 400));
@@ -154,6 +166,9 @@ export async function loginUser(email: string, password: string): Promise<UserAc
 
 // Logout user
 export function logoutUser(): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_LOGGED_OUT, 'true');
+  } catch {}
   saveCurrentUser(null);
 }
 
@@ -172,3 +187,4 @@ export function updateUserProfile(data: { name: string; mobile: string; professi
   saveCurrentUser(updated);
   return updated;
 }
+
