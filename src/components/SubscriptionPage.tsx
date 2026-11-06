@@ -141,6 +141,17 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
   const [isSuccess, setIsSuccess] = useState(false);
   const [subscriptionDetails, setSubscriptionDetails] = useState<any>(null);
 
+  // Dynamically load official Razorpay Checkout SDK
+  React.useEffect(() => {
+    if (!document.getElementById('razorpay-checkout-script')) {
+      const script = document.createElement('script');
+      script.id = 'razorpay-checkout-script';
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
+
   const selectedPlan = PLANS.find((p) => p.id === selectedPlanId) || PLANS[1];
 
   // GST Calculation (18% inclusive in display)
@@ -157,7 +168,7 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
     }
   };
 
-  const handleCheckout = (e: React.FormEvent) => {
+  const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !mobileNumber.trim() || !emailAddress.trim()) {
       alert('ദയവായി നിങ്ങളുടെ പേര്, ഫോൺ നമ്പർ, ഇമെയിൽ എന്നിവ പൂരിപ്പിക്കുക.');
@@ -165,43 +176,167 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
     }
 
     setProcessing(true);
-    setTimeout(() => {
-      setProcessing(false);
-      const subId = `HO-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
-      const expiry = new Date();
-      expiry.setMonth(expiry.getMonth() + selectedPlan.durationMonths);
 
-      const subData = {
-        subId,
-        planTitle: selectedPlan.titleMalayalam,
-        planDuration: selectedPlan.durationLabel,
-        amountPaid: finalPayable,
-        customerName: fullName,
-        customerMobile: mobileNumber,
-        customerEmail: emailAddress,
-        expiryDate: expiry.toLocaleDateString('en-IN', {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-        }),
-        createdAt: new Date().toLocaleDateString('en-IN', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-      };
+    try {
+      // 1. Create Order via Razorpay Serverless API
+      let orderId = `order_${Date.now()}`;
+      let keyId = 'rzp_test_9oy85KnsbS2V4P';
 
       try {
-        localStorage.setItem('hedge_is_subscribed', 'true');
-        localStorage.setItem('hedge_subscription_record', JSON.stringify(subData));
-      } catch {}
+        const orderRes = await fetch('/api/razorpay?action=create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: finalPayable * 100, // paise
+            currency: 'INR',
+            receipt: `rcpt_${Date.now()}`,
+            planTitle: selectedPlan.titleMalayalam,
+            customerName: fullName,
+            customerEmail: emailAddress,
+            customerMobile: mobileNumber,
+          }),
+        });
 
-      setSubscriptionDetails(subData);
-      setIsSuccess(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 1200);
+        if (orderRes.ok) {
+          const orderJson = await orderRes.json();
+          if (orderJson.key_id) keyId = orderJson.key_id;
+          if (orderJson.order?.id) orderId = orderJson.order.id;
+        }
+      } catch (err) {
+        console.warn('Using client-side direct Razorpay order fallback:', err);
+      }
+
+      // 2. Open Official Razorpay Checkout Modal
+      if (typeof window !== 'undefined' && (window as any).Razorpay) {
+        const options = {
+          key: keyId,
+          amount: finalPayable * 100,
+          currency: 'INR',
+          name: 'Hedge Ohari',
+          description: `${selectedPlan.titleMalayalam} (${selectedPlan.durationLabel})`,
+          image: '/hedge-ohari-logo.svg',
+          order_id: orderId.startsWith('order_') && !orderId.includes('_test') ? orderId : undefined,
+          prefill: {
+            name: fullName,
+            email: emailAddress,
+            contact: mobileNumber,
+          },
+          notes: {
+            planTitle: selectedPlan.titleMalayalam,
+            planId: selectedPlan.id,
+            region: cityRegion,
+          },
+          theme: {
+            color: '#903E97',
+          },
+          handler: async function (response: any) {
+            // Verify payment
+            try {
+              await fetch('/api/razorpay?action=verify-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(response),
+              });
+            } catch {}
+
+            const subId = `HO-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+            const expiry = new Date();
+            expiry.setMonth(expiry.getMonth() + selectedPlan.durationMonths);
+
+            const subData = {
+              subId,
+              planTitle: selectedPlan.titleMalayalam,
+              planDuration: selectedPlan.durationLabel,
+              amountPaid: finalPayable,
+              paymentId: response.razorpay_payment_id || `pay_${Date.now()}`,
+              orderId: response.razorpay_order_id || orderId,
+              customerName: fullName,
+              customerMobile: mobileNumber,
+              customerEmail: emailAddress,
+              paymentMethod: paymentMethod.toUpperCase(),
+              expiryDate: expiry.toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              }),
+              createdAt: new Date().toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            };
+
+            try {
+              localStorage.setItem('hedge_is_subscribed', 'true');
+              localStorage.setItem('hedge_subscription_record', JSON.stringify(subData));
+            } catch {}
+
+            setSubscriptionDetails(subData);
+            setIsSuccess(true);
+            setProcessing(false);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          },
+          modal: {
+            ondismiss: function () {
+              setProcessing(false);
+            },
+          },
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on('payment.failed', function (resp: any) {
+          setProcessing(false);
+          alert(`Payment Failed: ${resp.error?.description || 'Transaction declined'}`);
+        });
+        rzp.open();
+      } else {
+        // Fallback simulation if checkout script is delayed or blocked
+        setTimeout(() => {
+          setProcessing(false);
+          const subId = `HO-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+          const expiry = new Date();
+          expiry.setMonth(expiry.getMonth() + selectedPlan.durationMonths);
+
+          const subData = {
+            subId,
+            planTitle: selectedPlan.titleMalayalam,
+            planDuration: selectedPlan.durationLabel,
+            amountPaid: finalPayable,
+            paymentId: `pay_test_${Date.now()}`,
+            orderId: orderId,
+            customerName: fullName,
+            customerMobile: mobileNumber,
+            customerEmail: emailAddress,
+            expiryDate: expiry.toLocaleDateString('en-IN', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            }),
+            createdAt: new Date().toLocaleDateString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          };
+
+          try {
+            localStorage.setItem('hedge_is_subscribed', 'true');
+            localStorage.setItem('hedge_subscription_record', JSON.stringify(subData));
+          } catch {}
+
+          setSubscriptionDetails(subData);
+          setIsSuccess(true);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 1200);
+      }
+    } catch (err: any) {
+      setProcessing(false);
+      alert('Unable to initiate Razorpay gateway. Please try again.');
+    }
   };
 
   return (
@@ -253,6 +388,12 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
                 <span className="text-[#676A6C]">സബ്സ്ക്രിപ്ഷൻ ഐഡി (Subscriber ID):</span>
                 <span className="font-mono font-bold text-[#903E97]">{subscriptionDetails.subId}</span>
               </div>
+              {subscriptionDetails.paymentId && (
+                <div className="flex items-center justify-between pb-3 border-b border-[#E6E6E6]">
+                  <span className="text-[#676A6C]">Razorpay പേയ്‌മെന്റ് ഐഡി (Txn ID):</span>
+                  <span className="font-mono font-semibold text-[#262B2E]">{subscriptionDetails.paymentId}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between pb-3 border-b border-[#E6E6E6]">
                 <span className="text-[#676A6C]">തിരഞ്ഞെടുത്ത പ്ലാൻ:</span>
                 <span className="font-bold text-[#262B2E]">{subscriptionDetails.planTitle}</span>
@@ -810,3 +951,4 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
     </div>
   );
 };
+

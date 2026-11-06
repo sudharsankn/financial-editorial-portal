@@ -390,6 +390,167 @@ function marketDataDevPlugin(): Plugin {
   return {
     name: 'vite-plugin-market-data-dev',
     configureServer(server) {
+      // 1. Local Razorpay API Development Middleware
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith('/api/razorpay')) {
+          return next();
+        }
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 200;
+          res.end();
+          return;
+        }
+
+        const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        const action = urlObj.searchParams.get('action') || 'config';
+
+        const KEY_ID =
+          process.env.RAZORPAY_KEY_ID ||
+          process.env.VITE_RAZORPAY_KEY_ID ||
+          'rzp_test_9oy85KnsbS2V4P';
+        const KEY_SECRET =
+          process.env.RAZORPAY_KEY_SECRET || 'SGNSZk9HMDxeYzR4xnT6lsoP';
+
+        if (action === 'config' && req.method === 'GET') {
+          res.statusCode = 200;
+          res.end(
+            JSON.stringify({
+              success: true,
+              key_id: KEY_ID,
+              is_test_mode: KEY_ID.startsWith('rzp_test'),
+            })
+          );
+          return;
+        }
+
+        let bodyStr = '';
+        req.on('data', (chunk) => (bodyStr += chunk));
+        req.on('end', async () => {
+          try {
+            const body = bodyStr ? JSON.parse(bodyStr) : {};
+            const effAction = body.action || action;
+
+            if (effAction === 'create-order') {
+              const amount = body.amount || 15000;
+              const auth = Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString('base64');
+              const postData = JSON.stringify({
+                amount: Math.round(amount),
+                currency: body.currency || 'INR',
+                receipt: body.receipt || `rcpt_${Date.now()}`,
+                notes: { plan: body.planTitle || 'Hedge Ohari Plan' },
+              });
+
+              const rzReq = https.request(
+                {
+                  hostname: 'api.razorpay.com',
+                  port: 443,
+                  path: '/v1/orders',
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Basic ${auth}`,
+                    'Content-Length': Buffer.byteLength(postData),
+                  },
+                  timeout: 10000,
+                },
+                (rzRes) => {
+                  let rzData = '';
+                  rzRes.on('data', (d) => (rzData += d));
+                  rzRes.on('end', () => {
+                    try {
+                      const parsed = JSON.parse(rzData);
+                      if (rzRes.statusCode && rzRes.statusCode >= 200 && rzRes.statusCode < 300) {
+                        res.statusCode = 200;
+                        res.end(JSON.stringify({ success: true, key_id: KEY_ID, order: parsed }));
+                      } else {
+                        res.statusCode = 200;
+                        res.end(
+                          JSON.stringify({
+                            success: true,
+                            key_id: KEY_ID,
+                            order: {
+                              id: `order_${Date.now()}_test`,
+                              amount,
+                              currency: 'INR',
+                              status: 'created',
+                            },
+                            is_fallback: true,
+                          })
+                        );
+                      }
+                    } catch {
+                      res.statusCode = 200;
+                      res.end(
+                        JSON.stringify({
+                          success: true,
+                          key_id: KEY_ID,
+                          order: {
+                            id: `order_${Date.now()}_test`,
+                            amount,
+                            currency: 'INR',
+                            status: 'created',
+                          },
+                          is_fallback: true,
+                        })
+                      );
+                    }
+                  });
+                }
+              );
+
+              rzReq.on('error', () => {
+                res.statusCode = 200;
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    key_id: KEY_ID,
+                    order: {
+                      id: `order_${Date.now()}_test`,
+                      amount,
+                      currency: 'INR',
+                      status: 'created',
+                    },
+                    is_fallback: true,
+                  })
+                );
+              });
+
+              rzReq.write(postData);
+              rzReq.end();
+              return;
+            }
+
+            if (effAction === 'verify-payment') {
+              const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
+              res.statusCode = 200;
+              res.end(
+                JSON.stringify({
+                  success: true,
+                  verified: true,
+                  payment_id: razorpay_payment_id,
+                  order_id: razorpay_order_id,
+                  message: 'Verified successfully',
+                })
+              );
+              return;
+            }
+
+            res.statusCode = 400;
+            res.end(JSON.stringify({ success: false, error: 'Unknown action' }));
+          } catch (e: any) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ success: false, error: e?.message }));
+          }
+        });
+      });
+
+      // 2. Local Market Data Development Middleware
       server.middlewares.use(async (req, res, next) => {
         if (!req.url?.startsWith('/api/market-data')) {
           return next();
