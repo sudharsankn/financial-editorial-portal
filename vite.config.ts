@@ -414,9 +414,10 @@ function marketDataDevPlugin(): Plugin {
         const KEY_ID =
           process.env.RAZORPAY_KEY_ID ||
           process.env.VITE_RAZORPAY_KEY_ID ||
-          'rzp_test_9oy85KnsbS2V4P';
+          'rzp_test_pqTOMoiwZxODPK';
         const KEY_SECRET =
-          process.env.RAZORPAY_KEY_SECRET || 'SGNSZk9HMDxeYzR4xnT6lsoP';
+          process.env.RAZORPAY_KEY_SECRET ||
+          (KEY_ID.startsWith('rzp_live') ? 'qPgBtm4l5cTcMSGpGQsMlex0' : '');
 
         if (action === 'config' && req.method === 'GET') {
           res.statusCode = 200;
@@ -447,6 +448,20 @@ function marketDataDevPlugin(): Plugin {
                 notes: { plan: body.planTitle || 'Hedge Ohari Plan' },
               });
 
+              if (!KEY_SECRET) {
+                // If no secret configured (standard test checkout), open client checkout directly
+                res.statusCode = 200;
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    key_id: KEY_ID,
+                    order: null,
+                    is_fallback: true,
+                  })
+                );
+                return;
+              }
+
               const rzReq = https.request(
                 {
                   hostname: 'api.razorpay.com',
@@ -475,12 +490,7 @@ function marketDataDevPlugin(): Plugin {
                           JSON.stringify({
                             success: true,
                             key_id: KEY_ID,
-                            order: {
-                              id: `order_${Date.now()}_test`,
-                              amount,
-                              currency: 'INR',
-                              status: 'created',
-                            },
+                            order: null,
                             is_fallback: true,
                           })
                         );
@@ -491,12 +501,7 @@ function marketDataDevPlugin(): Plugin {
                         JSON.stringify({
                           success: true,
                           key_id: KEY_ID,
-                          order: {
-                            id: `order_${Date.now()}_test`,
-                            amount,
-                            currency: 'INR',
-                            status: 'created',
-                          },
+                          order: null,
                           is_fallback: true,
                         })
                       );
@@ -511,12 +516,19 @@ function marketDataDevPlugin(): Plugin {
                   JSON.stringify({
                     success: true,
                     key_id: KEY_ID,
-                    order: {
-                      id: `order_${Date.now()}_test`,
-                      amount,
-                      currency: 'INR',
-                      status: 'created',
-                    },
+                    order: null,
+                    is_fallback: true,
+                  })
+                );
+              });
+              rzReq.on('timeout', () => {
+                rzReq.destroy();
+                res.statusCode = 200;
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    key_id: KEY_ID,
+                    order: null,
                     is_fallback: true,
                   })
                 );

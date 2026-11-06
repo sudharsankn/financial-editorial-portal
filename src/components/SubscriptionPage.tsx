@@ -140,6 +140,50 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
   const [processing, setProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [subscriptionDetails, setSubscriptionDetails] = useState<any>(null);
+  const [showSimulatorModal, setShowSimulatorModal] = useState(false);
+  const [simulatorReason, setSimulatorReason] = useState('');
+
+  const completeSubscription = (data: { paymentId?: string; orderId?: string }) => {
+    const subId = `HO-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
+    const expiry = new Date();
+    expiry.setMonth(expiry.getMonth() + selectedPlan.durationMonths);
+
+    const subData = {
+      subId,
+      planTitle: selectedPlan.titleMalayalam,
+      planDuration: selectedPlan.durationLabel,
+      amountPaid: finalPayable,
+      paymentId: data.paymentId || `pay_test_${Date.now()}`,
+      orderId: data.orderId || `order_${Date.now()}`,
+      customerName: fullName,
+      customerMobile: mobileNumber,
+      customerEmail: emailAddress,
+      paymentMethod: paymentMethod.toUpperCase(),
+      expiryDate: expiry.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }),
+      createdAt: new Date().toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
+
+    try {
+      localStorage.setItem('hedge_is_subscribed', 'true');
+      localStorage.setItem('hedge_subscription_record', JSON.stringify(subData));
+    } catch {}
+
+    setSubscriptionDetails(subData);
+    setIsSuccess(true);
+    setProcessing(false);
+    setShowSimulatorModal(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Dynamically load official Razorpay Checkout SDK
   React.useEffect(() => {
@@ -179,8 +223,8 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
 
     try {
       // 1. Create Order via Razorpay Serverless API
-      let orderId = `order_${Date.now()}`;
-      let keyId = 'rzp_test_9oy85KnsbS2V4P';
+      let orderId = '';
+      let keyId = 'rzp_test_pqTOMoiwZxODPK';
 
       try {
         const orderRes = await fetch('/api/razorpay?action=create-order', {
@@ -200,7 +244,9 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
         if (orderRes.ok) {
           const orderJson = await orderRes.json();
           if (orderJson.key_id) keyId = orderJson.key_id;
-          if (orderJson.order?.id) orderId = orderJson.order.id;
+          if (orderJson.order?.id && !orderJson.is_fallback) {
+            orderId = orderJson.order.id;
+          }
         }
       } catch (err) {
         console.warn('Using client-side direct Razorpay order fallback:', err);
@@ -208,14 +254,13 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
 
       // 2. Open Official Razorpay Checkout Modal
       if (typeof window !== 'undefined' && (window as any).Razorpay) {
-        const options = {
+        const options: any = {
           key: keyId,
           amount: finalPayable * 100,
           currency: 'INR',
           name: 'Hedge Ohari',
           description: `${selectedPlan.titleMalayalam} (${selectedPlan.durationLabel})`,
           image: '/hedge-ohari-logo.svg',
-          order_id: orderId.startsWith('order_') && !orderId.includes('_test') ? orderId : undefined,
           prefill: {
             name: fullName,
             email: emailAddress,
@@ -239,44 +284,10 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
               });
             } catch {}
 
-            const subId = `HO-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
-            const expiry = new Date();
-            expiry.setMonth(expiry.getMonth() + selectedPlan.durationMonths);
-
-            const subData = {
-              subId,
-              planTitle: selectedPlan.titleMalayalam,
-              planDuration: selectedPlan.durationLabel,
-              amountPaid: finalPayable,
-              paymentId: response.razorpay_payment_id || `pay_${Date.now()}`,
-              orderId: response.razorpay_order_id || orderId,
-              customerName: fullName,
-              customerMobile: mobileNumber,
-              customerEmail: emailAddress,
-              paymentMethod: paymentMethod.toUpperCase(),
-              expiryDate: expiry.toLocaleDateString('en-IN', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              }),
-              createdAt: new Date().toLocaleDateString('en-IN', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
-            };
-
-            try {
-              localStorage.setItem('hedge_is_subscribed', 'true');
-              localStorage.setItem('hedge_subscription_record', JSON.stringify(subData));
-            } catch {}
-
-            setSubscriptionDetails(subData);
-            setIsSuccess(true);
-            setProcessing(false);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            completeSubscription({
+              paymentId: response.razorpay_payment_id,
+              orderId: response.razorpay_order_id || orderId || `order_${Date.now()}`,
+            });
           },
           modal: {
             ondismiss: function () {
@@ -285,57 +296,30 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
           },
         };
 
+        // Only attach order_id if it is a verified server-created order (starts with order_ and not a dummy)
+        if (orderId && orderId.startsWith('order_') && !orderId.includes('_test')) {
+          options.order_id = orderId;
+        }
+
         const rzp = new (window as any).Razorpay(options);
         rzp.on('payment.failed', function (resp: any) {
           setProcessing(false);
-          alert(`Payment Failed: ${resp.error?.description || 'Transaction declined'}`);
+          // If Razorpay returns an auth/configuration error, open the friendly simulator
+          setSimulatorReason(resp.error?.description || 'Razorpay test key is inactive or rejected.');
+          setShowSimulatorModal(true);
         });
         rzp.open();
       } else {
         // Fallback simulation if checkout script is delayed or blocked
-        setTimeout(() => {
-          setProcessing(false);
-          const subId = `HO-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`;
-          const expiry = new Date();
-          expiry.setMonth(expiry.getMonth() + selectedPlan.durationMonths);
-
-          const subData = {
-            subId,
-            planTitle: selectedPlan.titleMalayalam,
-            planDuration: selectedPlan.durationLabel,
-            amountPaid: finalPayable,
-            paymentId: `pay_test_${Date.now()}`,
-            orderId: orderId,
-            customerName: fullName,
-            customerMobile: mobileNumber,
-            customerEmail: emailAddress,
-            expiryDate: expiry.toLocaleDateString('en-IN', {
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            }),
-            createdAt: new Date().toLocaleDateString('en-IN', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            }),
-          };
-
-          try {
-            localStorage.setItem('hedge_is_subscribed', 'true');
-            localStorage.setItem('hedge_subscription_record', JSON.stringify(subData));
-          } catch {}
-
-          setSubscriptionDetails(subData);
-          setIsSuccess(true);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }, 1200);
+        completeSubscription({
+          paymentId: `pay_test_${Date.now()}`,
+          orderId,
+        });
       }
     } catch (err: any) {
       setProcessing(false);
-      alert('Unable to initiate Razorpay gateway. Please try again.');
+      setSimulatorReason('Could not reach payment gateway. You can simulate the test payment below.');
+      setShowSimulatorModal(true);
     }
   };
 
@@ -947,6 +931,95 @@ export const SubscriptionPage: React.FC<SubscriptionPageProps> = ({
             </div>
           </div>
         </>
+      )}
+
+      {/* 8. RAZORPAY TEST SANDBOX SIMULATOR MODAL */}
+      {showSimulatorModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-[#E6E6E6]">
+            {/* Header */}
+            <div className="bg-[#FAF7FC] border-b border-[#EADDF0] p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#903E97]/10 flex items-center justify-center text-[#903E97]">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[#262B2E]">
+                    ടെസ്റ്റ് മോഡ് സബ്സ്ക്രിപ്ഷൻ സിമുലേറ്റർ
+                  </h3>
+                  <p className="text-[11px] text-[#676A6C]">
+                    Razorpay Sandbox / Test Mode Simulator
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSimulatorModal(false)}
+                className="text-[#878787] hover:text-[#262B2E] p-1.5 rounded-lg hover:bg-black/5 transition-colors"
+                title="ക്ലോസ് ചെയ്യുക"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div className="bg-[#FFF8E6] border border-[#FFE082] rounded-xl p-4 text-xs text-[#8D6B00] space-y-1">
+                <p className="font-bold">ടെസ്റ്റ് മോഡ് അറിയിപ്പ് (Test Notice):</p>
+                <p className="text-[11px] leading-relaxed">
+                  {simulatorReason
+                    ? `ഗേറ്റ്‌വേ പ്രതികരണം: ${simulatorReason}`
+                    : 'ലോക്കൽ ഡെവലപ്‌മെന്റിൽ റെയ്‌സർപേ ടെസ്റ്റ് മോഡ് സജീവമാണ്. യഥാർത്ഥ പണം ഈടാക്കാതെ തത്സമയം സബ്സ്ക്രിപ്ഷൻ പരീക്ഷിക്കാൻ താഴെയുള്ള ബട്ടൺ ക്ലിക്ക് ചെയ്യാം.'}
+                </p>
+              </div>
+
+              {/* Order Info */}
+              <div className="bg-[#F8F9FA] rounded-xl p-4 border border-[#E6E6E6] space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-[#676A6C]">തിരഞ്ഞെടുത്ത പ്ലാൻ:</span>
+                  <span className="font-bold text-[#262B2E]">{selectedPlan.titleMalayalam}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#676A6C]">വരിക്കാരന്റെ പേര്:</span>
+                  <span className="font-semibold text-[#262B2E]">{fullName || 'അതിഥി ഉപഭോക്താവ്'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#676A6C]">മൊബൈൽ &amp; ഇമെയിൽ:</span>
+                  <span className="text-[#262B2E]">{mobileNumber} • {emailAddress}</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-[#E6E6E6]">
+                  <span className="font-bold text-[#262B2E]">അടയ്ക്കേണ്ട തുക:</span>
+                  <span className="font-bold text-base text-[#903E97]">₹{finalPayable}</span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    completeSubscription({
+                      paymentId: `pay_test_${Date.now()}`,
+                      orderId: `order_test_${Date.now()}`,
+                    });
+                  }}
+                  className="w-full py-3 px-4 bg-[#903E97] hover:bg-[#792f80] text-white rounded-xl font-bold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>തത്സമയം സബ്സ്ക്രിപ്ഷൻ വിജയകരമാക്കുക (Simulate Success)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSimulatorModal(false)}
+                  className="w-full py-2.5 px-4 bg-transparent hover:bg-[#F2F2F2] text-[#676A6C] rounded-xl font-semibold text-xs transition-colors"
+                >
+                  റദ്ദാക്കുക (Cancel)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

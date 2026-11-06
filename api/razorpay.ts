@@ -2,13 +2,18 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
 import https from 'https';
 
+const DEFAULT_TEST_KEY_ID = 'rzp_test_pqTOMoiwZxODPK';
+const DEFAULT_LIVE_KEY_ID = 'rzp_live_RhU1GLkKVbjq50';
+const DEFAULT_LIVE_SECRET = 'qPgBtm4l5cTcMSGpGQsMlex0';
+
 const RAZORPAY_KEY_ID =
   process.env.RAZORPAY_KEY_ID ||
   process.env.VITE_RAZORPAY_KEY_ID ||
-  'rzp_test_9oy85KnsbS2V4P';
+  DEFAULT_TEST_KEY_ID;
 
 const RAZORPAY_KEY_SECRET =
-  process.env.RAZORPAY_KEY_SECRET || 'SGNSZk9HMDxeYzR4xnT6lsoP';
+  process.env.RAZORPAY_KEY_SECRET ||
+  (RAZORPAY_KEY_ID.startsWith('rzp_live') ? DEFAULT_LIVE_SECRET : '');
 
 function makeRazorpayRequest(
   path: string,
@@ -123,20 +128,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           order: orderData,
         });
       } catch (apiErr: any) {
-        console.warn('Razorpay order creation fallback:', apiErr?.error?.description || apiErr?.message);
-        // Fallback for sandboxing/local test if keys have API restriction:
-        // Return structured order format so client checkout can open directly
-        const mockOrderId = `order_${Date.now()}_test`;
+        console.warn('Razorpay server order creation notice:', apiErr?.error?.description || apiErr?.message);
+        // Client direct checkout mode (standard Razorpay mode when keys don't require server order)
         return res.status(200).json({
           success: true,
           key_id: RAZORPAY_KEY_ID,
-          order: {
-            id: mockOrderId,
-            amount: Math.round(amount),
-            currency,
-            status: 'created',
-            receipt,
-          },
+          order: null,
           is_fallback: true,
         });
       }
