@@ -47,7 +47,7 @@ try {
     localStorage.removeItem('financial_portal_ipos_v1');
     localStorage.removeItem('financial_portal_ipos_v2');
   }
-} catch {}
+} catch { }
 
 // Popular Indian Large-Caps tracked for Gainers & Losers
 const TRACKED_NIFTY_SYMBOLS = [
@@ -79,7 +79,7 @@ export async function executeUnifiedMarketSync(
       if (res.ok && contentType.includes('application/json')) {
         apiData = await res.json();
       }
-    } catch {}
+    } catch { }
 
     // Fallback: Direct client-side fetch if /api/market-data is not running locally
     if (!apiData || !apiData.success) {
@@ -166,12 +166,12 @@ export async function executeUnifiedMarketSync(
     if (liveIndices.length > 0) {
       try {
         localStorage.setItem(LOCAL_INDICES_KEY, JSON.stringify(liveIndices));
-      } catch {}
+      } catch { }
       const client = getSupabaseClient();
       if (client) {
         try {
           await client.from('market_tickers').upsert(liveIndices);
-        } catch {}
+        } catch { }
       }
     }
 
@@ -339,17 +339,17 @@ export async function fetchLiveMarketSnapshot(): Promise<{
         if (liveIndices.length > 0) {
           try {
             localStorage.setItem(LOCAL_INDICES_KEY, JSON.stringify(liveIndices));
-          } catch {}
+          } catch { }
         }
         if (liveTrending.length > 0) {
           try {
             localStorage.setItem(LOCAL_TRENDING_KEY, JSON.stringify(liveTrending));
-          } catch {}
+          } catch { }
         }
         if (liveIpos.length > 0) {
           try {
             localStorage.setItem(LOCAL_IPOS_KEY, JSON.stringify(liveIpos));
-          } catch {}
+          } catch { }
         }
 
         return {
@@ -446,7 +446,7 @@ export async function saveNewsItemToDatabase(item: NewsItemRecord): Promise<{ su
       list.unshift(enriched);
     }
     localStorage.setItem(LOCAL_NEWS_KEY, JSON.stringify(list));
-  } catch {}
+  } catch { }
 
   return { success: true };
 }
@@ -465,7 +465,7 @@ export async function fetchSavedNews(): Promise<NewsItemRecord[]> {
           is_saved_to_db: true,
         })) as NewsItemRecord[];
       }
-    } catch {}
+    } catch { }
   }
 
   try {
@@ -473,7 +473,7 @@ export async function fetchSavedNews(): Promise<NewsItemRecord[]> {
     if (raw) {
       return JSON.parse(raw) as NewsItemRecord[];
     }
-  } catch {}
+  } catch { }
 
   return [];
 }
@@ -560,7 +560,7 @@ export async function mergeNewsIntoStories(newsArticles: any[]): Promise<number>
       }
     });
     localStorage.setItem(LOCAL_STORIES_KEY, JSON.stringify(localStories));
-  } catch {}
+  } catch { }
 
   return storiesToInsert.length;
 }
@@ -574,7 +574,7 @@ export async function saveTrendingStocksToDedicatedTable(
 ): Promise<number> {
   try {
     localStorage.setItem(LOCAL_TRENDING_KEY, JSON.stringify(trendingStocks));
-  } catch {}
+  } catch { }
 
   return trendingStocks.length;
 }
@@ -717,7 +717,7 @@ export async function fetchTrendingStocks(publishedOnly: boolean = false): Promi
         return publishedOnly ? list.filter((i) => i.is_published) : list;
       }
     }
-  } catch {}
+  } catch { }
 
   return publishedOnly
     ? DEFAULT_TRENDING_STOCKS.filter((i) => i.is_published)
@@ -733,7 +733,7 @@ export async function saveIposToDedicatedTable(ipos: IpoItemRecord[]) {
     // Only persist live (active) and upcoming IPOs
     const unlisted = ipos.filter((i) => i.status === 'active' || i.status === 'upcoming');
     localStorage.setItem(LOCAL_IPOS_KEY, JSON.stringify(unlisted));
-  } catch {}
+  } catch { }
 }
 
 /**
@@ -757,7 +757,7 @@ export async function fetchIpos(publishedOnly: boolean = false): Promise<IpoItem
         return publishedOnly ? unlisted.filter((i) => i.is_published) : unlisted;
       }
     }
-  } catch {}
+  } catch { }
 
   // Curated active & upcoming SEBI-approved IPO pipeline (strictly unlisted issues)
   const now = new Date().toISOString();
@@ -937,7 +937,7 @@ export async function saveCompanyStockLookup(symbol: string, data: any) {
       list.unshift(record);
     }
     localStorage.setItem(LOCAL_STOCK_LOOKUP_KEY, JSON.stringify(list));
-  } catch {}
+  } catch { }
 }
 
 /**
